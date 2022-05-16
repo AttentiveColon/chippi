@@ -62,7 +62,6 @@ fn get_nibbles(s: u8, e: u8, addr: u16) -> u16 {
 
     //addr >> e << s
 
-
     // s :1, e: 2
     //0xABCD
 
@@ -121,13 +120,14 @@ impl Chip8 {
     //executes the instruction on pc and changes all the state
     //ram[pc] + ram[pc + 1]
     pub fn tick(&mut self) {
-
-        let instruction = ((self.ram[self.pc as usize] as u16) << 8) | self.ram[self.pc as usize + 1] as u16;
+        let instruction =
+            ((self.ram[self.pc as usize] as u16) << 8) | self.ram[self.pc as usize + 1] as u16;
         println!("pc = {:#06X?}", instruction);
 
         //get the first nibble and pattern match it
         match get_nibble(0, instruction) {
-            0x0 => { //this can be 1 of 3 instr
+            0x0 => {
+                //this can be 1 of 3 instr
                 match instruction {
                     //CLS
                     0x00E0 => self.CLS(),
@@ -152,9 +152,8 @@ impl Chip8 {
             0xD => todo!(),
             0xE => todo!(),
             0xF => todo!(),
-            _ => panic!()
+            _ => panic!(),
         }
-        
 
         self.pc += 2;
     }
@@ -199,6 +198,148 @@ impl Chip8 {
     /// Skip next instruction if Vx = Vy.
     /// The interpreter compares register Vx to register Vy, and if they are equal, increments the program counter by 2.
     fn SER(&mut self, x: u8, y: u8) {}
+
+    /// 6xkk - LD Vx, Byte
+    /// Set Vx = kk
+    /// The interpreter puts the value kk into register Vx.
+    fn LD(&mut self, x: u8, kk: u8) {}
+
+    /// 7xkk = ADD Vx, Byte
+    /// Set Vx = Vx + kk
+    /// Adds the value kk to the value of register Vx, then stores the result in Vx
+    fn ADD(&mut self, x: u8, kk: u8) {}
+
+    /// 8xy0 - LDR Vx, Vy
+    /// Set Vx = Vy
+    /// Stores the value of register Vy in register Vx.
+    fn LDR(&mut self, x: u8, y: u8) {}
+
+    /// 8xy1 - OR Vx, Vy
+    /// Set Vx = Vx OR Vy
+    /// Performs a bitwise Or on the values of Vx and Vy, then stores the result in Vx.
+    fn OR(&mut self, x: u8, y: u8) {}
+
+    /// 8xy2 - AND Vx, Vy
+    /// Set Vx = Vx AND Vy
+    /// Performs a bitwise AND on the values of Vx and Vy, then stores the result in Vx.
+    fn AND(&mut self, x: u8, y: u8) {}
+
+    /// 8xy3 - XOR Vx, Vy
+    /// Set Vx = Vx XOR Vy
+    /// Performs a bitwise exclusive OR on the values of Vx and Vy, then stores the result in Vx.
+    fn XOR(&mut self, x: u8, y: u8) {}
+
+    /// 8xy4 = ADDR Vx, Vy
+    /// Set Vx = Vx + Vy, set VF = carry
+    /// The values of Vx and Vy are added together. If the result is greater than 8 bits VF is set to 1, Otherwise 0.
+    /// Only the lowest 8 bits of the result are kept, and stored in Vx.
+    fn ADDR(&mut self, x: u8, y: u8) {}
+
+    /// 8xy5 = SUB Vx, Vy
+    /// Set Vx = Vx - Vy, set VF = NOT borrow
+    /// If Vx > Vy, then VF is set to 1, otherwise 0. Then Vy is subtracted form Vx, and the results stored in Vx.
+    fn SUB(&mut self, x: u8, y: u8) {}
+
+    /// 8xy6 - SHR Vx {, Vy}
+    /// Set Vx = Vx SHR 1
+    /// If the least-significant bit of Vx is 1, then VF is set to 1, otherwise 0. Then Vx is divided by 2.
+    fn SHR(&mut self, x: u8, y: u8) {}
+
+    /// 8xy7 - SUBN Vx, Vy
+    /// Set Vx = Vy - Vx, set VF = NOT borrow
+    /// If Vy > Vx, then VF is set to 1, otherwise 0. Then Vx is subtracted from Vy, and the result is stored in Vx.
+    fn SUBN(&mut self, x: u8, y: u8) {}
+
+    /// 8xyE - SHL Vx {, Vy}
+    /// Set Vx = Vx SHL 1
+    /// If the most-significant bit of Vx is 1, then VF is set to 1, otherwise 0. Then Vx is multiplied by 2.
+    fn SHL(&mut self, x: u8, y: u8) {}
+
+    /// 9xy0 - SNE Vx, Vy
+    /// Skip next instruction is Vx != Vy
+    /// The values of Vx and Vy are compared, and if they are not equal, the program counter is increased by 2.
+    fn SNER(&mut self, x: u8, y: u8) {}
+
+    /// Annn - LDI I, addr
+    /// Set I = nnn.
+    /// The value of register I is set to nnn.
+    fn LDI(&mut self, addr: u16) {}
+
+    /// Bnnn JPO V0, addr
+    /// Jump to location nnn + V0
+    /// The program counter is set to nnn plus the value of V0
+    fn JPO(&mut self, addr: u16) {}
+
+    /// Cxkk - RND Vx, Byte
+    /// Set Vx = random byte AND kk
+    /// The interpreter generates a random number from 0 to 255, which is then ANDed with the value kk.
+    /// The results are stored in Vx.
+    fn RND(&mut self, x: u8, kk: u8) {}
+
+    /// Dxyn - DRW Vx, Vy, nibble
+    /// Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+    /// The interpreter reads n bytes from memory, starting at the address stored in I. These bytes are then displayed
+    /// as sprites on screen at coordinates (Vx, Vy). Sprites are XORed onto the existing screen. If this causes any pixels
+    /// to be erased, VF is set to 1, otherwise it is set to 0. If the sprite is positioned so part of it is outside the
+    /// coordinates of the display, it wraps around to the opposite side of the screen. See instruction 8xy3 for more
+    /// information on XOR, and section 2.4, Display, for more information on the Chip-8 screen and sprites.
+    fn DRW(&mut self, x: u8, y: u8, n: u8) {}
+
+    /// Ex9E - SKPK Vx
+    /// Skip next instruction if key with the value of Vx is pressed
+    /// Checks the keyboard, and if the key corresponding to the value of Vx is currently in the down position, PC in increased by 2.
+    fn SKPK(&mut self, x: u8) {}
+
+    /// ExA1 - SKNPK Vx
+    /// Skip the next instruction if key with the value of Vx is not pressed.
+    /// Checks the keyboard, and if the key corresponding to the value of Vx is currently in the up position, PC is increased by 2.
+    fn SKNPK(&mut self, x: u8) {}
+
+    /// Fx07 - LDT Vx, DT
+    /// Set Vx = delay timer value
+    /// The value of DT is placed into Vx.
+    fn LDT(&mut self, x: u8) {}
+
+    /// Fx0A - LDK Vx, K
+    /// Wait for a key press, store the value of the key in Vx
+    /// All execution stops until a key is pressed, then the value of that key is stored in Vx.
+    fn LDK(&mut self, x: u8) {}
+
+    /// Fx15 - LDD DT, Vx
+    /// Set delay timer = Vx
+    /// DT is set equal to value of Vx.
+    fn LDD(&mut self, x: u8) {}
+
+    /// Fx18 - LDS ST, Vx
+    /// Set sound timer = Vx
+    /// ST is set equal to the value of Vx.
+    fn LDS(&mut self, x: u8) {}
+
+    /// Fx1E - ADDI I, Vx
+    /// Set I = I + Vx
+    /// The values of I and Vx are added, and the results are stored in I.
+    fn ADDI(&mut self, x: u8) {}
+
+    /// Fx29 - LDF F, Vx
+    /// Set I = Location of sprite for digit Vx.
+    /// The value of I is set to the location for the hexadecimal sprite corresponding to the value of Vx.
+    fn LDF(&mut self, x: u8) {}
+
+    /// Fx33 - LDB B, Vx
+    /// Store BCD representation of Vx in memory locations I, I+1, and I+2
+    /// The integer takes the decimal value of Vx, and places the hundreds digit in memory at location I, the tens digit in location I+1,
+    /// and the ones digits at location I+2.
+    fn LDB(&mut self, x: u8) {}
+
+    /// Fx55 - LDIX [I], Vx
+    /// Store registers V0 through Vx in memory starting at location I.
+    /// The interpreter copies the values of registers v0 through Vx ihnto memory, starting at the address in I.
+    fn LDIX(&mut self, x: u8) {}
+
+    /// Fx65 - LDRX Vx, [I]
+    /// Read registers V0 through Vx from memory starting at location I
+    /// The interpreter reads values from memory starting at location I into registers V0 through Vx.
+    fn LDRX(&mut self, x: u8) {}
 }
 
 #[test]
