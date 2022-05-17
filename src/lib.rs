@@ -1,5 +1,7 @@
 #![allow(dead_code, non_snake_case)]
 
+use rand::Rng;
+
 pub enum Computer {
     Normal,
     Eti,
@@ -27,6 +29,8 @@ fn g_nib(nib: Nibble, addr: u16) -> u16 {
 const PROGRAM_START_LOCATION: usize = 0x200;
 const ETI_PROGRAM_START_LOCATION: usize = 0x600;
 const TEXT_MEMORY_START: usize = 0x000;
+const DISPLAY_WIDTH: u8 = 64;
+const DISPLAY_HEIGHT: u8 = 32;
 
 #[rustfmt::skip]
 const TEXT_ARRAY: [u8; 80] = [
@@ -70,15 +74,16 @@ fn get_nibbles(s: u8, e: u8, addr: u16) -> u16 {
 
 pub struct Chip8 {
     ram: [u8; 4096],
-    regs: [u8; 16],
-    ireg: u16,
-    dreg: u8,
-    sreg: u8,
-    pc: u16,
-    sp: u8,
-    stack: [u16; 16],
-    kb: [u8; 16],
-    display: [u8; 64 * 32],
+    regs: [u8; 16],   //general purpose registers. but the last one is reserved
+    ireg: u16,        //i reg. used to store memory addresses
+    dreg: u8,         // delay timer register
+    sreg: u8,         // sound timer register
+    pc: u16,          // program counter
+    sp: u8,           // stack pointer (index to stack)
+    stack: [u16; 16], // stack. array of pointers
+    kb: [u8; 16],     // the keyboard
+    display: [u8; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize], // the display pixels
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Chip8 {
@@ -97,6 +102,7 @@ impl Chip8 {
                 Computer::Normal => PROGRAM_START_LOCATION,
                 Computer::Eti => ETI_PROGRAM_START_LOCATION,
             } as u16,
+            rng: rand::thread_rng(),
         }
     }
 
@@ -162,119 +168,231 @@ impl Chip8 {
     /// Jump to a machine code routine at nnn.
     /// This instruction is only used on the old computers on which Chip-8 was originally implemented.
     /// It is ignored by modern interpreters.
-    fn SYS(&mut self, addr: u16) {}
+    fn SYS(&mut self, addr: u16) {
+        //not implemented
+        self.pc += 2;
+    }
 
     /// 0e00 - CLS
     /// Clear the display.
-    fn CLS(&mut self) {}
+    fn CLS(&mut self) {
+        self.display[..].fill(0x0);
+        self.pc += 2;
+    }
 
     /// 00ee - RET
     /// Return from a subroutine
     /// The interpreter sets the program counter to the address at the top of the stack, then subtracts 1 from the stack pointer.
-    fn RET(&mut self) {}
+    fn RET(&mut self) {
+        self.pc = self.stack[self.sp as usize];
+        self.sp -= 1;
+        self.pc += 2;
+    }
 
     /// 1nnn - JP addr
     /// Jump to location nnn.
     /// The interpreter sets the program counter to nnn.
-    pub fn JP(&mut self, addr: u16) {}
+    pub fn JP(&mut self, addr: u16) {
+        self.pc = addr;
+    }
 
     /// 2nnn - CALL addr
     /// Call subroutine at nnn.
     /// The interpreter increments the stack pointer, then puts the current PC on the top of the stack.
     /// The PC is then set to nnn.
-    fn CALL(&mut self, addr: u16) {}
+    fn CALL(&mut self, addr: u16) {
+        self.sp += 1;
+        self.stack[self.sp as usize] = self.pc;
+        self.pc = addr;
+    }
 
     /// 3xkk - SE Vx, Byte
     /// Skip the next instruction if Vx = kk.
     /// The interpreter compare register Vx to kk, and if they are equal, increments the program counter by 2.
-    fn SE(&mut self, x: u8, kk: u8) {}
+    fn SE(&mut self, x: u8, kk: u8) {
+        if self.regs[x as usize] == kk {
+            self.pc += 4;
+        } else {
+            self.pc += 2;
+        }
+    }
 
     /// 4xkk - SNE Vx, Byte
     /// Skip next instruction if Vx != kk.
     /// The interpreter compares register Vx to kk, and if they are not equal, increments the program counter by 2.
-    fn SNE(&mut self, x: u8, kk: u8) {}
+    fn SNE(&mut self, x: u8, kk: u8) {
+        if self.regs[x as usize] != kk {
+            self.pc += 4;
+        } else {
+            self.pc += 2;
+        }
+    }
 
     /// 5xy0 - SER Vx, Vy
     /// Skip next instruction if Vx = Vy.
     /// The interpreter compares register Vx to register Vy, and if they are equal, increments the program counter by 2.
-    fn SER(&mut self, x: u8, y: u8) {}
+    fn SER(&mut self, x: u8, y: u8) {
+        if self.regs[x as usize] == self.regs[y as usize] {
+            self.pc += 4;
+        } else {
+            self.pc += 2;
+        }
+    }
 
     /// 6xkk - LD Vx, Byte
     /// Set Vx = kk
     /// The interpreter puts the value kk into register Vx.
-    fn LD(&mut self, x: u8, kk: u8) {}
+    fn LD(&mut self, x: u8, kk: u8) {
+        self.regs[x as usize] = kk;
+        self.pc += 2;
+    }
 
     /// 7xkk = ADD Vx, Byte
     /// Set Vx = Vx + kk
     /// Adds the value kk to the value of register Vx, then stores the result in Vx
-    fn ADD(&mut self, x: u8, kk: u8) {}
+    fn ADD(&mut self, x: u8, kk: u8) {
+        self.regs[x as usize] += kk;
+        self.pc += 2;
+    }
 
     /// 8xy0 - LDR Vx, Vy
     /// Set Vx = Vy
     /// Stores the value of register Vy in register Vx.
-    fn LDR(&mut self, x: u8, y: u8) {}
+    fn LDR(&mut self, x: u8, y: u8) {
+        self.regs[x as usize] = self.regs[y as usize];
+        self.pc += 2;
+    }
 
     /// 8xy1 - OR Vx, Vy
     /// Set Vx = Vx OR Vy
     /// Performs a bitwise Or on the values of Vx and Vy, then stores the result in Vx.
-    fn OR(&mut self, x: u8, y: u8) {}
+    fn OR(&mut self, x: u8, y: u8) {
+        self.regs[x as usize] = self.regs[x as usize] | self.regs[y as usize];
+        self.pc += 2;
+    }
 
     /// 8xy2 - AND Vx, Vy
     /// Set Vx = Vx AND Vy
     /// Performs a bitwise AND on the values of Vx and Vy, then stores the result in Vx.
-    fn AND(&mut self, x: u8, y: u8) {}
+    fn AND(&mut self, x: u8, y: u8) {
+        self.regs[x as usize] = self.regs[x as usize] & self.regs[y as usize];
+        self.pc += 2;
+    }
 
     /// 8xy3 - XOR Vx, Vy
     /// Set Vx = Vx XOR Vy
     /// Performs a bitwise exclusive OR on the values of Vx and Vy, then stores the result in Vx.
-    fn XOR(&mut self, x: u8, y: u8) {}
+    fn XOR(&mut self, x: u8, y: u8) {
+        self.regs[x as usize] = self.regs[x as usize] ^ self.regs[y as usize];
+        self.pc += 2;
+    }
 
     /// 8xy4 = ADDR Vx, Vy
     /// Set Vx = Vx + Vy, set VF = carry
     /// The values of Vx and Vy are added together. If the result is greater than 8 bits VF is set to 1, Otherwise 0.
     /// Only the lowest 8 bits of the result are kept, and stored in Vx.
-    fn ADDR(&mut self, x: u8, y: u8) {}
+    fn ADDR(&mut self, x: u8, y: u8) {
+        let result: u16 = self.regs[x as usize] as u16 + self.regs[y as usize] as u16;
+        if result > u8::MAX as u16 {
+            self.regs[0xF] = 1;
+        } else {
+            self.regs[0xF] = 0;
+        }
+
+        self.regs[x as usize] = (result & 0x00FF) as u8;
+        self.pc += 2;
+    }
 
     /// 8xy5 = SUB Vx, Vy
     /// Set Vx = Vx - Vy, set VF = NOT borrow
-    /// If Vx > Vy, then VF is set to 1, otherwise 0. Then Vy is subtracted form Vx, and the results stored in Vx.
-    fn SUB(&mut self, x: u8, y: u8) {}
+    /// If Vx > Vy, then VF is set to 1, otherwise 0. Then Vy is subtracted from Vx, and the results stored in Vx.
+    fn SUB(&mut self, x: u8, y: u8) {
+        if self.regs[x as usize] > self.regs[y as usize] {
+            self.regs[0xF] = 1;
+        } else {
+            self.regs[0xF] = 0;
+        }
+
+        self.regs[x as usize] = self.regs[x as usize].wrapping_sub(self.regs[y as usize]);
+        self.pc += 2;
+    }
 
     /// 8xy6 - SHR Vx {, Vy}
     /// Set Vx = Vx SHR 1
     /// If the least-significant bit of Vx is 1, then VF is set to 1, otherwise 0. Then Vx is divided by 2.
-    fn SHR(&mut self, x: u8, y: u8) {}
+    fn SHR(&mut self, x: u8, y: u8) {
+        if self.regs[x as usize] & 0x1 == 0x1 {
+            self.regs[0xF] = 1;
+        } else {
+            self.regs[0xF] = 0;
+        }
+
+        self.regs[x as usize] = self.regs[x as usize] >> 1;
+        self.pc += 2;
+    }
 
     /// 8xy7 - SUBN Vx, Vy
     /// Set Vx = Vy - Vx, set VF = NOT borrow
     /// If Vy > Vx, then VF is set to 1, otherwise 0. Then Vx is subtracted from Vy, and the result is stored in Vx.
-    fn SUBN(&mut self, x: u8, y: u8) {}
+    fn SUBN(&mut self, x: u8, y: u8) {
+        if self.regs[y as usize] > self.regs[x as usize] {
+            self.regs[0xF] = 1;
+        } else {
+            self.regs[0xF] = 0;
+        }
+
+        self.regs[x as usize] = self.regs[y as usize].wrapping_sub(self.regs[x as usize]);
+        self.pc += 2;
+    }
 
     /// 8xyE - SHL Vx {, Vy}
     /// Set Vx = Vx SHL 1
     /// If the most-significant bit of Vx is 1, then VF is set to 1, otherwise 0. Then Vx is multiplied by 2.
-    fn SHL(&mut self, x: u8, y: u8) {}
+    fn SHL(&mut self, x: u8, y: u8) {
+        if self.regs[x as usize] & 0x80 != 0 {
+            self.regs[0xF] = 1;
+        } else {
+            self.regs[0xF] = 0;
+        }
+
+        self.regs[x as usize] = self.regs[x as usize] << 1;
+        self.pc += 2;
+    }
 
     /// 9xy0 - SNE Vx, Vy
     /// Skip next instruction is Vx != Vy
     /// The values of Vx and Vy are compared, and if they are not equal, the program counter is increased by 2.
-    fn SNER(&mut self, x: u8, y: u8) {}
+    fn SNER(&mut self, x: u8, y: u8) {
+        if self.regs[x as usize] != self.regs[y as usize] {
+            self.pc += 4;
+        } else {
+            self.pc += 2;
+        }
+    }
 
     /// Annn - LDI I, addr
     /// Set I = nnn.
     /// The value of register I is set to nnn.
-    fn LDI(&mut self, addr: u16) {}
+    fn LDI(&mut self, addr: u16) {
+        self.ireg = addr;
+        self.pc += 2;
+    }
 
     /// Bnnn JPO V0, addr
     /// Jump to location nnn + V0
     /// The program counter is set to nnn plus the value of V0
-    fn JPO(&mut self, addr: u16) {}
+    fn JPO(&mut self, addr: u16) {
+        self.pc = addr + self.regs[0] as u16;
+    }
 
     /// Cxkk - RND Vx, Byte
     /// Set Vx = random byte AND kk
     /// The interpreter generates a random number from 0 to 255, which is then ANDed with the value kk.
     /// The results are stored in Vx.
-    fn RND(&mut self, x: u8, kk: u8) {}
+    fn RND(&mut self, x: u8, kk: u8) {
+        self.regs[x as usize] = self.rng.gen::<u8>() & kk;
+        self.pc += 2;
+    }
 
     /// Dxyn - DRW Vx, Vy, nibble
     /// Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
@@ -283,58 +401,128 @@ impl Chip8 {
     /// to be erased, VF is set to 1, otherwise it is set to 0. If the sprite is positioned so part of it is outside the
     /// coordinates of the display, it wraps around to the opposite side of the screen. See instruction 8xy3 for more
     /// information on XOR, and section 2.4, Display, for more information on the Chip-8 screen and sprites.
-    fn DRW(&mut self, x: u8, y: u8, n: u8) {}
+    fn DRW(&mut self, x: u8, y: u8, n: u8) {
+        for i in 0..n {
+            //the sprite row
+            let mut current_byte = self.ram[self.ireg as usize + i as usize];
+
+            for j in 0..8 {
+                let position =
+                    ((x + j) % DISPLAY_WIDTH * DISPLAY_WIDTH + (y + i) % DISPLAY_HEIGHT) as usize;
+
+                let current_bit = current_byte & 0x80;
+
+                if self.display[position] != 0 && current_bit != 0 {
+                    self.regs[0xF] = 1;
+                } else {
+                    self.regs[0xF] = 0;
+                }
+
+                self.display[position] ^= current_bit;
+                current_byte <<= 1;
+            }
+        }
+
+        self.pc += 2;
+    }
 
     /// Ex9E - SKPK Vx
     /// Skip next instruction if key with the value of Vx is pressed
-    /// Checks the keyboard, and if the key corresponding to the value of Vx is currently in the down position, PC in increased by 2.
-    fn SKPK(&mut self, x: u8) {}
+    /// Checks the keyboard, and if the key corresponding to the value of Vx is currently in the down position, PC is increased by 2.
+    fn SKPK(&mut self, x: u8) {
+        if self.kb[self.regs[x as usize] as usize] != 0 {
+            self.pc += 4;
+        } else {
+            self.pc += 2;
+        }
+    }
 
     /// ExA1 - SKNPK Vx
     /// Skip the next instruction if key with the value of Vx is not pressed.
     /// Checks the keyboard, and if the key corresponding to the value of Vx is currently in the up position, PC is increased by 2.
-    fn SKNPK(&mut self, x: u8) {}
+    fn SKNPK(&mut self, x: u8) {
+        if self.kb[self.regs[x as usize] as usize] == 0 {
+            self.pc += 4;
+        } else {
+            self.pc += 2;
+        }
+    }
 
     /// Fx07 - LDT Vx, DT
     /// Set Vx = delay timer value
     /// The value of DT is placed into Vx.
-    fn LDT(&mut self, x: u8) {}
+    fn LDT(&mut self, x: u8) {
+        self.regs[x as usize] = self.dreg;
+        self.pc += 2;
+    }
 
     /// Fx0A - LDK Vx, K
     /// Wait for a key press, store the value of the key in Vx
     /// All execution stops until a key is pressed, then the value of that key is stored in Vx.
-    fn LDK(&mut self, x: u8) {}
+    fn LDK(&mut self, x: u8) {
+        for i in self.kb {
+            if i != 0 {
+                self.regs[x as usize] = i;
+                self.pc += 2;
+                break;
+            }
+        }
+    }
 
     /// Fx15 - LDD DT, Vx
     /// Set delay timer = Vx
     /// DT is set equal to value of Vx.
-    fn LDD(&mut self, x: u8) {}
+    fn LDD(&mut self, x: u8) {
+        self.dreg = self.regs[x as usize];
+        self.pc += 2;
+    }
 
     /// Fx18 - LDS ST, Vx
     /// Set sound timer = Vx
     /// ST is set equal to the value of Vx.
-    fn LDS(&mut self, x: u8) {}
+    fn LDS(&mut self, x: u8) {
+        self.sreg = self.regs[x as usize];
+        self.pc += 2;
+    }
 
     /// Fx1E - ADDI I, Vx
     /// Set I = I + Vx
     /// The values of I and Vx are added, and the results are stored in I.
-    fn ADDI(&mut self, x: u8) {}
+    fn ADDI(&mut self, x: u8) {
+        self.ireg += self.regs[x as usize] as u16;
+        self.pc += 2;
+    }
 
     /// Fx29 - LDF F, Vx
     /// Set I = Location of sprite for digit Vx.
     /// The value of I is set to the location for the hexadecimal sprite corresponding to the value of Vx.
-    fn LDF(&mut self, x: u8) {}
+    fn LDF(&mut self, x: u8) {
+        self.ireg = self.ram[self.regs[x as usize] as usize * 5 + TEXT_MEMORY_START] as u16;
+        self.pc += 2;
+    }
 
     /// Fx33 - LDB B, Vx
     /// Store BCD representation of Vx in memory locations I, I+1, and I+2
     /// The integer takes the decimal value of Vx, and places the hundreds digit in memory at location I, the tens digit in location I+1,
     /// and the ones digits at location I+2.
-    fn LDB(&mut self, x: u8) {}
+    fn LDB(&mut self, x: u8) {
+        let mut value = self.regs[x as usize];
+        for i in 2..=0 {
+            self.ram[(self.ireg + i) as usize] = value % 10;
+            value /= 10;
+        }
+        self.pc += 2;
+    }
 
     /// Fx55 - LDIX [I], Vx
     /// Store registers V0 through Vx in memory starting at location I.
-    /// The interpreter copies the values of registers v0 through Vx ihnto memory, starting at the address in I.
-    fn LDIX(&mut self, x: u8) {}
+    /// The interpreter copies the values of registers v0 through Vx into memory, starting at the address in I.
+    fn LDIX(&mut self, x: u8) {
+        for (i, val) in self.regs.into_iter().enumerate().take(x as usize) {
+            self.ram[self.ireg as usize + i] = val;
+        }
+        self.pc += 2;
+    }
 
     /// Fx65 - LDRX Vx, [I]
     /// Read registers V0 through Vx from memory starting at location I
