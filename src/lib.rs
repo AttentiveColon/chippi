@@ -52,6 +52,15 @@ const TEXT_ARRAY: [u8; 80] = [
     0xf0, 0x80, 0xf0, 0x80, 0x80, //F
 ];
 
+fn load_text(offset: usize) -> [u8; 4096] {
+    let mut ram = [0x0; 4096];
+
+    for i in offset..TEXT_ARRAY.len() {
+        ram[i] = TEXT_ARRAY[i - offset];
+    }
+    ram
+}
+
 fn get_nibble(n: u8, addr: u16) -> u16 {
     match n {
         0 => (addr & 0xF000) >> 12,
@@ -61,19 +70,19 @@ fn get_nibble(n: u8, addr: u16) -> u16 {
     }
 }
 
-fn get_nibbles(s: u8, e: u8, addr: u16) -> u16 {
-    //(1,2,add) => addr & 0FF0 >> 4
+// fn get_nibbles(s: u8, e: u8, addr: u16) -> u16 {
+//     //(1,2,add) => addr & 0FF0 >> 4
 
-    //addr >> e << s
+//     //addr >> e << s
 
-    // s :1, e: 2
-    //0xABCD
+//     // s :1, e: 2
+//     //0xABCD
 
-    ((0xFFFF >> s) & addr) >> (4 * (3 - e))
-}
+//     ((0xFFFF >> s) & addr) >> (4 * (3 - e))
+// }
 
 pub struct Chip8 {
-    ram: [u8; 4096],
+    pub ram: [u8; 4096],
     regs: [u8; 16],   //general purpose registers. but the last one is reserved
     ireg: u16,        //i reg. used to store memory addresses
     dreg: u8,         // delay timer register
@@ -82,14 +91,14 @@ pub struct Chip8 {
     sp: u8,           // stack pointer (index to stack)
     stack: [u16; 16], // stack. array of pointers
     kb: [u8; 16],     // the keyboard
-    display: [u8; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize], // the display pixels
+    pub display: [u8; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize],
     rng: rand::rngs::ThreadRng,
 }
 
 impl Chip8 {
     pub fn new(comp: Computer) -> Chip8 {
         Chip8 {
-            ram: [0x0; 4096],
+            ram: load_text(TEXT_MEMORY_START),
             regs: [0x0; 16],
             ireg: 0x00,
             dreg: 0x0,
@@ -97,13 +106,32 @@ impl Chip8 {
             sp: 0x0,
             stack: [0x00; 16],
             kb: [0x0; 16],
-            display: [0x0; 64 * 32],
+            display: [0; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize],
             pc: match comp {
                 Computer::Normal => PROGRAM_START_LOCATION,
                 Computer::Eti => ETI_PROGRAM_START_LOCATION,
             } as u16,
             rng: rand::thread_rng(),
         }
+    }
+
+    //pixel on '█'
+    //pixel off '░'
+    pub fn draw(&self) {
+        let mut screen: String = String::new();
+
+        for i in 0..DISPLAY_HEIGHT {
+            for j in 0..DISPLAY_WIDTH {
+                if self.display[(i as u32 * DISPLAY_WIDTH as u32+ j as u32) as usize] != 0 {
+                    screen += "█";
+                } else {
+                    screen += "░";
+                }
+            }
+            screen += "\n";
+        }
+
+        println!("{}", screen);
     }
 
     pub fn load_rom(&mut self, path: String) {
@@ -120,7 +148,7 @@ impl Chip8 {
         {
             *dst = *src;
         }
-        println!("{:02X?}", &self.ram[0x200..0x222]);
+        //println!("{:02X?}", &self.ram[0x200..0x222]);
     }
 
     //executes the instruction on pc and changes all the state
@@ -140,28 +168,104 @@ impl Chip8 {
                     //RET
                     0x00EE => self.RET(),
                     //SYS
-                    _ => self.SYS(get_nibbles(1, 3, instruction)),
+                    _ => self.SYS(g_nib(Nibble::Address, instruction)),
                 }
             }
-            0x1 => self.JP(get_nibbles(1, 3, instruction)),
-            0x2 => self.CALL(get_nibbles(1, 3, instruction)),
-            0x3 => todo!(),
-            0x4 => todo!(),
-            0x5 => todo!(),
-            0x6 => todo!(),
-            0x7 => todo!(),
-            0x8 => todo!(),
-            0x9 => todo!(),
-            0xA => todo!(),
-            0xB => todo!(),
-            0xC => todo!(),
-            0xD => todo!(),
-            0xE => todo!(),
-            0xF => todo!(),
+            0x1 => self.JP(g_nib(Nibble::Address, instruction)),
+            0x2 => self.CALL(g_nib(Nibble::Address, instruction)),
+            0x3 => self.SE(
+                g_nib(Nibble::Second, instruction) as u8,
+                g_nib(Nibble::Byte, instruction) as u8,
+            ),
+            0x4 => self.SNE(
+                g_nib(Nibble::Second, instruction) as u8,
+                g_nib(Nibble::Byte, instruction) as u8,
+            ),
+            0x5 => self.SER(
+                g_nib(Nibble::Second, instruction) as u8,
+                g_nib(Nibble::Third, instruction) as u8,
+            ),
+            0x6 => self.LD(
+                g_nib(Nibble::Second, instruction) as u8,
+                g_nib(Nibble::Byte, instruction) as u8,
+            ),
+            0x7 => self.ADD(
+                g_nib(Nibble::Second, instruction) as u8,
+                g_nib(Nibble::Byte, instruction) as u8,
+            ),
+            0x8 => match g_nib(Nibble::Last, instruction) {
+                0x0 => self.LDR(
+                    g_nib(Nibble::Second, instruction) as u8 as u8,
+                    g_nib(Nibble::Third, instruction) as u8,
+                ),
+                0x1 => self.OR(
+                    g_nib(Nibble::Second, instruction) as u8,
+                    g_nib(Nibble::Third, instruction) as u8,
+                ),
+                0x2 => self.AND(
+                    g_nib(Nibble::Second, instruction) as u8,
+                    g_nib(Nibble::Third, instruction) as u8,
+                ),
+                0x3 => self.XOR(
+                    g_nib(Nibble::Second, instruction) as u8,
+                    g_nib(Nibble::Third, instruction) as u8,
+                ),
+                0x4 => self.ADDR(
+                    g_nib(Nibble::Second, instruction) as u8,
+                    g_nib(Nibble::Third, instruction) as u8,
+                ),
+                0x5 => self.SUB(
+                    g_nib(Nibble::Second, instruction) as u8,
+                    g_nib(Nibble::Third, instruction) as u8,
+                ),
+                0x6 => self.SHR(
+                    g_nib(Nibble::Second, instruction) as u8,
+                    g_nib(Nibble::Third, instruction) as u8,
+                ),
+                0x7 => self.SUBN(
+                    g_nib(Nibble::Second, instruction) as u8,
+                    g_nib(Nibble::Third, instruction) as u8,
+                ),
+                0xE => self.SHL(
+                    g_nib(Nibble::Second, instruction) as u8,
+                    g_nib(Nibble::Third, instruction) as u8,
+                ),
+                _ => panic!(),
+            },
+            0x9 => self.SNER(
+                g_nib(Nibble::Second, instruction) as u8,
+                g_nib(Nibble::Third, instruction) as u8,
+            ),
+            0xA => self.LDI(g_nib(Nibble::Address, instruction)),
+            0xB => self.JPO(g_nib(Nibble::Address, instruction)),
+            0xC => self.RND(
+                g_nib(Nibble::Second, instruction) as u8,
+                g_nib(Nibble::Byte, instruction) as u8,
+            ),
+            0xD => self.DRW(
+                g_nib(Nibble::Second, instruction) as u8,
+                g_nib(Nibble::Third, instruction) as u8,
+                g_nib(Nibble::Last, instruction) as u8,
+            ),
+            0xE => match g_nib(Nibble::Byte, instruction) {
+                0x9E => self.SKPK(g_nib(Nibble::Second, instruction) as u8),
+                0xA1 => self.SKNPK(g_nib(Nibble::Second, instruction) as u8),
+                _ => panic!(),
+            },
+            0xF => match g_nib(Nibble::Byte, instruction) {
+                0x07 => self.LDT(g_nib(Nibble::Second, instruction) as u8),
+                0x0A => self.LDK(g_nib(Nibble::Second, instruction) as u8),
+                0x15 => self.LDD(g_nib(Nibble::Second, instruction) as u8),
+                0x18 => self.LDS(g_nib(Nibble::Second, instruction) as u8),
+                0x1E => self.ADDI(g_nib(Nibble::Second, instruction) as u8),
+                0x29 => self.LDF(g_nib(Nibble::Second, instruction) as u8),
+                0x33 => self.LDB(g_nib(Nibble::Second, instruction) as u8),
+                0x55 => self.LDIX(g_nib(Nibble::Second, instruction) as u8),
+                0x65 => self.LDRX(g_nib(Nibble::Second, instruction) as u8),
+                _ => panic!(),
+            },
             _ => panic!(),
         }
-
-        self.pc += 2;
     }
 
     /// 0nnn - SYS addr
@@ -251,7 +355,8 @@ impl Chip8 {
     /// Set Vx = Vx + kk
     /// Adds the value kk to the value of register Vx, then stores the result in Vx
     fn ADD(&mut self, x: u8, kk: u8) {
-        self.regs[x as usize] += kk;
+        //self.regs[x as usize] += kk;
+        self.regs[x as usize] = self.regs[x as usize].wrapping_add(kk);
         self.pc += 2;
     }
 
@@ -402,23 +507,33 @@ impl Chip8 {
     /// coordinates of the display, it wraps around to the opposite side of the screen. See instruction 8xy3 for more
     /// information on XOR, and section 2.4, Display, for more information on the Chip-8 screen and sprites.
     fn DRW(&mut self, x: u8, y: u8, n: u8) {
-        for i in 0..n {
+        for i in 0..n as u32 {
             //the sprite row
-            let mut current_byte = self.ram[self.ireg as usize + i as usize];
 
-            for j in 0..8 {
-                let position =
-                    ((x + j) % DISPLAY_WIDTH * DISPLAY_WIDTH + (y + i) % DISPLAY_HEIGHT) as usize;
+            let byte_index = self.ireg as usize + i as usize;
+            println!("drawing sprite. byte index: {}", byte_index);
+            let mut current_byte = self.ram[byte_index];
+            println!("drawing sprite. byte: {:02X?}", current_byte);
 
-                let current_bit = current_byte & 0x80;
+            for j in 0..8 as u32 {
 
-                if self.display[position] != 0 && current_bit != 0 {
+                // position = ((y+i) % DISPLAY_HEIGHT) * DISPLAY_WIDTH + (x+j) % DISPLAY_WIDTH
+
+                let position = ((self.regs[y as usize] as u32 + i) % DISPLAY_HEIGHT as u32) * DISPLAY_WIDTH as u32 + (self.regs[x as usize] as u32 + j) % DISPLAY_WIDTH as u32;
+
+                //this is maybe wrong
+                // let position =
+                //     ((x as u32 + j) % DISPLAY_WIDTH as u32 * DISPLAY_WIDTH as u32+ (y as u32 + i) % DISPLAY_HEIGHT as u32) as usize;
+
+                let current_bit = (current_byte & 0x80) >> 7;
+
+                if self.display[position as usize] != 0 && current_bit != 0 {
                     self.regs[0xF] = 1;
                 } else {
                     self.regs[0xF] = 0;
                 }
 
-                self.display[position] ^= current_bit;
+                self.display[position as usize] ^= current_bit;
                 current_byte <<= 1;
             }
         }
@@ -518,7 +633,7 @@ impl Chip8 {
     /// Store registers V0 through Vx in memory starting at location I.
     /// The interpreter copies the values of registers v0 through Vx into memory, starting at the address in I.
     fn LDIX(&mut self, x: u8) {
-        for (i, val) in self.regs.into_iter().enumerate().take(x as usize) {
+        for (i, val) in self.regs.into_iter().take(x as usize).enumerate() {
             self.ram[self.ireg as usize + i] = val;
         }
         self.pc += 2;
@@ -527,7 +642,18 @@ impl Chip8 {
     /// Fx65 - LDRX Vx, [I]
     /// Read registers V0 through Vx from memory starting at location I
     /// The interpreter reads values from memory starting at location I into registers V0 through Vx.
-    fn LDRX(&mut self, x: u8) {}
+    fn LDRX(&mut self, x: u8) {
+        for (i, val) in self
+            .ram
+            .into_iter()
+            .skip(self.ireg as usize)
+            .take(x as usize)
+            .enumerate()
+        {
+            self.regs[i] = val;
+        }
+        self.pc += 2;
+    }
 }
 
 #[test]
@@ -540,14 +666,14 @@ fn tests() {
     assert_eq!(get_nibble(3, addr), 0xD);
 }
 
-#[test]
-fn test_get_nibbles() {
-    let addr: u16 = 0xABCD;
-    assert_eq!(get_nibbles(0, 1, addr), 0xAB);
-    assert_eq!(get_nibbles(1, 2, addr), 0xBC);
-    assert_eq!(get_nibbles(1, 1, addr), 0xB);
-    assert_eq!(get_nibbles(1, 3, addr), 0xBCD);
-}
+// #[test]
+// fn test_get_nibbles() {
+//     let addr: u16 = 0xABCD;
+//     assert_eq!(get_nibbles(0, 1, addr), 0xAB);
+//     assert_eq!(get_nibbles(1, 2, addr), 0xBC);
+//     assert_eq!(get_nibbles(1, 1, addr), 0xB);
+//     assert_eq!(get_nibbles(1, 3, addr), 0xBCD);
+// }
 
 #[test]
 fn test_g_nibs() {
@@ -557,4 +683,12 @@ fn test_g_nibs() {
     assert_eq!(g_nib(Nibble::Last, addr), 0xD);
     assert_eq!(g_nib(Nibble::Byte, addr), 0xCD);
     assert_eq!(g_nib(Nibble::Address, addr), 0xBCD);
+
+    let addr: u16 = 0x6B1A;
+
+    let second = g_nib(Nibble::Second, addr);
+    let byte = g_nib(Nibble::Byte, addr);
+    let thing = (second, byte);
+
+    assert_eq!(thing, (0xb, 0x1a));
 }
