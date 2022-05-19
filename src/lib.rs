@@ -137,9 +137,6 @@ impl Chip8 {
     pub fn load_rom(&mut self, path: String) {
         let the_file: Vec<u8> = std::fs::read(path).unwrap();
 
-        println!("{:02X?}", the_file);
-
-        //self.ram[]
         for (dst, src) in self
             .ram
             .iter_mut()
@@ -148,7 +145,6 @@ impl Chip8 {
         {
             *dst = *src;
         }
-        //println!("{:02X?}", &self.ram[0x200..0x222]);
     }
 
     //executes the instruction on pc and changes all the state
@@ -511,19 +507,11 @@ impl Chip8 {
             //the sprite row
 
             let byte_index = self.ireg as usize + i as usize;
-            println!("drawing sprite. byte index: {}", byte_index);
             let mut current_byte = self.ram[byte_index];
-            println!("drawing sprite. byte: {:02X?}", current_byte);
 
             for j in 0..8 as u32 {
 
-                // position = ((y+i) % DISPLAY_HEIGHT) * DISPLAY_WIDTH + (x+j) % DISPLAY_WIDTH
-
                 let position = ((self.regs[y as usize] as u32 + i) % DISPLAY_HEIGHT as u32) * DISPLAY_WIDTH as u32 + (self.regs[x as usize] as u32 + j) % DISPLAY_WIDTH as u32;
-
-                //this is maybe wrong
-                // let position =
-                //     ((x as u32 + j) % DISPLAY_WIDTH as u32 * DISPLAY_WIDTH as u32+ (y as u32 + i) % DISPLAY_HEIGHT as u32) as usize;
 
                 let current_bit = (current_byte & 0x80) >> 7;
 
@@ -622,7 +610,7 @@ impl Chip8 {
     /// and the ones digits at location I+2.
     fn LDB(&mut self, x: u8) {
         let mut value = self.regs[x as usize];
-        for i in 2..=0 {
+        for i in (0..=2).rev() {
             self.ram[(self.ireg + i) as usize] = value % 10;
             value /= 10;
         }
@@ -633,7 +621,7 @@ impl Chip8 {
     /// Store registers V0 through Vx in memory starting at location I.
     /// The interpreter copies the values of registers v0 through Vx into memory, starting at the address in I.
     fn LDIX(&mut self, x: u8) {
-        for (i, val) in self.regs.into_iter().take(x as usize).enumerate() {
+        for (i, val) in self.regs.into_iter().take((x + 1) as usize).enumerate() {
             self.ram[self.ireg as usize + i] = val;
         }
         self.pc += 2;
@@ -647,7 +635,7 @@ impl Chip8 {
             .ram
             .into_iter()
             .skip(self.ireg as usize)
-            .take(x as usize)
+            .take((x + 1) as usize)
             .enumerate()
         {
             self.regs[i] = val;

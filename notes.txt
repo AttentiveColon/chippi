@@ -1,150 +1,32 @@
 -- todo--
 
-
-WHAT'S WRONG:
-
-F5
-F3
-
-and the others one maybe.
-
-- log everything w a log crate
-
-x finish that one instruction
-x finish nibble instructions
-x load the text into memory
-- run a test rom
 - render the display
-- test nibble functions
 
    pixel on '█'
    pixel off '░'
 
 
-todo
+pending things:
 
-what to debug
+use windows::Win32::{
+    Foundation::HANDLE,
+    Security::SECURITY_ATTRIBUTES,
+    Storage::FileSystem::{
+        CreateFileA, FILE_ACCESS_FLAGS, FILE_FLAGS_AND_ATTRIBUTES, FILE_GENERIC_READ,
+        FILE_GENERIC_WRITE, FILE_SHARE_WRITE, OPEN_EXISTING,
+    },
+};
 
-- how we set ireg <-> how we use ireg = has to be compatible
-   - LDI sets ireg
-
-
-debugging
-
-A206 --not sussy
-9560 -medium sussy
-A202 
-
-less likely
-
-6B1A --not sussy
-A232 
-A23E
-2242
-
--- debugging 2
-
-ALL INSTRUCTIONS UNTIL THE FIRST DRAW:
-
-pc = 0x124E // JP - jump to 0x24E
-pc = 0x6801 // LD - loading into v8 = 0x01
-pc = 0x6905 // LD - loading into v9 = 0x05
-pc = 0x6A0A // LD - loading into vA = 0x0A
-pc = 0x6B01 // LD - loading into vB = 0x01
-pc = 0x652A // LD - loading into v5 = 0x2A
-pc = 0x662B // LD - loading into v6 = 0x2B
-pc = 0xA216 // LDI - set ireg = 0x216
-pc = 0xD8B4 // DRW - DRAW sprite 4 BYTES LONG at (8, B) starting at ram[IREG]
-
-IT's SUPPOSED TO DRAW A 3!!!!!!
-
-HERE IS THE 3:
-
-1110
-0110
-0010
-1110
-
-
-
-drawing sprite. byte index: 534
-drawing sprite. byte: E0
-drawing sprite. byte index: 535
-drawing sprite. byte: 60
-drawing sprite. byte index: 536
-drawing sprite. byte: 20
-drawing sprite. byte index: 537
-drawing sprite. byte: E0
-pc = 0xA23E
-pc = 0xD9B4
-drawing sprite. byte index: 574
-drawing sprite. byte: A0
-drawing sprite. byte index: 575
-drawing sprite. byte: 40
-drawing sprite. byte index: 576
-drawing sprite. byte: A0
-drawing sprite. byte index: 577
-drawing sprite. byte: A0
-pc = 0xA202
-pc = 0x362B
-pc = 0xDAB4
-drawing sprite. byte index: 514
-drawing sprite. byte: EA
-drawing sprite. byte index: 515
-drawing sprite. byte: AC
-drawing sprite. byte index: 516
-drawing sprite. byte: AA
-drawing sprite. byte index: 517
-drawing sprite. byte: EA
-pc = 0x6B06
-pc = 0xA21A
-pc = 0xD8B4
-drawing sprite. byte index: 538
-drawing sprite. byte: A0
-drawing sprite. byte index: 539
-drawing sprite. byte: E0
-drawing sprite. byte index: 540
-drawing sprite. byte: 20
-drawing sprite. byte index: 541
-drawing sprite. byte: 20
-pc = 0xA23E
-pc = 0xD9B4
-drawing sprite. byte index: 574
-drawing sprite. byte: A0
-drawing sprite. byte index: 575
-drawing sprite. byte: 40
-drawing sprite. byte index: 576
-drawing sprite. byte: A0
-drawing sprite. byte index: 577
-drawing sprite. byte: A0
-
-
-
-
-
----------
-
-b -> x
-
-0b0000 0x0
-0b0001 0x1
-0b0010 0x2
-0b0011 0x3
-0b0100 0x4
-0b0101 0x5
-0b0110 0x6
-0b0111 0x7
-0b1000 0x8
-0b1001 0x9
-0b1010 0xA
-0b1011 0xB
-0b1100 0xC
-0b1101 0xD
-0b1110 0xE
-0b1111 0xF
-
-
-
-[(0,0) (1,0) (2, 0)] (3, 0)
-[(0,1) (1,1) (2, 1)]
-[(0,0) (1,0) (2, 0)]
+    //trying to get handle to console buffer
+    unsafe {
+        let console_file_handle = CreateFileA(
+            "CONOUT$",
+            FILE_GENERIC_READ | FILE_GENERIC_WRITE,
+            FILE_SHARE_WRITE,
+            &SECURITY_ATTRIBUTES::default(),
+            OPEN_EXISTING,
+            FILE_FLAGS_AND_ATTRIBUTES::default(),
+            HANDLE::default(),
+        )
+        .unwrap();
+    }
