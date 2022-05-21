@@ -29,8 +29,8 @@ fn g_nib(nib: Nibble, addr: u16) -> u16 {
 const PROGRAM_START_LOCATION: usize = 0x200;
 const ETI_PROGRAM_START_LOCATION: usize = 0x600;
 const TEXT_MEMORY_START: usize = 0x000;
-const DISPLAY_WIDTH: u8 = 64;
-const DISPLAY_HEIGHT: u8 = 32;
+pub const DISPLAY_WIDTH: u8 = 64;
+pub const DISPLAY_HEIGHT: u8 = 32;
 
 #[rustfmt::skip]
 const TEXT_ARRAY: [u8; 80] = [
@@ -90,7 +90,7 @@ pub struct Chip8 {
     pc: u16,          // program counter
     sp: u8,           // stack pointer (index to stack)
     stack: [u16; 16], // stack. array of pointers
-    kb: [u8; 16],     // the keyboard
+    pub kb: [u8; 16],     // the keyboard
     pub display: [u8; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize],
     rng: rand::rngs::ThreadRng,
 }
@@ -122,7 +122,7 @@ impl Chip8 {
 
         for i in 0..DISPLAY_HEIGHT {
             for j in 0..DISPLAY_WIDTH {
-                if self.display[(i as u32 * DISPLAY_WIDTH as u32+ j as u32) as usize] != 0 {
+                if self.display[(i as u32 * DISPLAY_WIDTH as u32 + j as u32) as usize] != 0 {
                     screen += "█";
                 } else {
                     screen += "░";
@@ -152,7 +152,10 @@ impl Chip8 {
     pub fn tick(&mut self) {
         let instruction =
             ((self.ram[self.pc as usize] as u16) << 8) | self.ram[self.pc as usize + 1] as u16;
-        println!("pc = {:#06X?}", instruction);
+
+        if self.dreg > 0 {
+            self.dreg -= 1;
+        }
 
         //get the first nibble and pattern match it
         match get_nibble(0, instruction) {
@@ -268,7 +271,7 @@ impl Chip8 {
     /// Jump to a machine code routine at nnn.
     /// This instruction is only used on the old computers on which Chip-8 was originally implemented.
     /// It is ignored by modern interpreters.
-    fn SYS(&mut self, addr: u16) {
+    fn SYS(&mut self, _addr: u16) {
         //not implemented
         self.pc += 2;
     }
@@ -421,7 +424,7 @@ impl Chip8 {
     /// 8xy6 - SHR Vx {, Vy}
     /// Set Vx = Vx SHR 1
     /// If the least-significant bit of Vx is 1, then VF is set to 1, otherwise 0. Then Vx is divided by 2.
-    fn SHR(&mut self, x: u8, y: u8) {
+    fn SHR(&mut self, x: u8, _y: u8) {
         if self.regs[x as usize] & 0x1 == 0x1 {
             self.regs[0xF] = 1;
         } else {
@@ -449,7 +452,7 @@ impl Chip8 {
     /// 8xyE - SHL Vx {, Vy}
     /// Set Vx = Vx SHL 1
     /// If the most-significant bit of Vx is 1, then VF is set to 1, otherwise 0. Then Vx is multiplied by 2.
-    fn SHL(&mut self, x: u8, y: u8) {
+    fn SHL(&mut self, x: u8, _y: u8) {
         if self.regs[x as usize] & 0x80 != 0 {
             self.regs[0xF] = 1;
         } else {
@@ -503,6 +506,7 @@ impl Chip8 {
     /// coordinates of the display, it wraps around to the opposite side of the screen. See instruction 8xy3 for more
     /// information on XOR, and section 2.4, Display, for more information on the Chip-8 screen and sprites.
     fn DRW(&mut self, x: u8, y: u8, n: u8) {
+        self.regs[0xF] = 0;
         for i in 0..n as u32 {
             //the sprite row
 
@@ -510,16 +514,17 @@ impl Chip8 {
             let mut current_byte = self.ram[byte_index];
 
             for j in 0..8 as u32 {
-
-                let position = ((self.regs[y as usize] as u32 + i) % DISPLAY_HEIGHT as u32) * DISPLAY_WIDTH as u32 + (self.regs[x as usize] as u32 + j) % DISPLAY_WIDTH as u32;
+                let position = ((self.regs[y as usize] as u32 + i) % DISPLAY_HEIGHT as u32)
+                    * DISPLAY_WIDTH as u32
+                    + (self.regs[x as usize] as u32 + j) % DISPLAY_WIDTH as u32;
 
                 let current_bit = (current_byte & 0x80) >> 7;
 
                 if self.display[position as usize] != 0 && current_bit != 0 {
                     self.regs[0xF] = 1;
-                } else {
-                    self.regs[0xF] = 0;
-                }
+                } //else {
+                  // self.regs[0xF] = 0;
+                  // }
 
                 self.display[position as usize] ^= current_bit;
                 current_byte <<= 1;
@@ -600,7 +605,7 @@ impl Chip8 {
     /// Set I = Location of sprite for digit Vx.
     /// The value of I is set to the location for the hexadecimal sprite corresponding to the value of Vx.
     fn LDF(&mut self, x: u8) {
-        self.ireg = self.ram[self.regs[x as usize] as usize * 5 + TEXT_MEMORY_START] as u16;
+        self.ireg = self.regs[x as usize] as u16 * 5 + TEXT_MEMORY_START as u16;
         self.pc += 2;
     }
 

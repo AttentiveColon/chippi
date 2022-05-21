@@ -7,16 +7,5 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8.5"
+macroquad = "0.3.16"
 
-[dependencies.windows]
-version = "0.36.1"
-features = [
-    "alloc",
-    "Data_Xml_Dom",
-    "Win32_Foundation",
-    "Win32_Storage_FileSystem",
-    "Win32_Security",
-    "Win32_System_Threading",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_System_Console"
-]

@@ -1,32 +1,15 @@
 -- todo--
 
-- render the display
+- the display:
 
-   pixel on '█'
-   pixel off '░'
+few options
+
+ - window crate and raw opengl (winit and opengl crate for opengl bindings)
+ - macroquad (game engine. it does everything)
 
 
-pending things:
 
-use windows::Win32::{
-    Foundation::HANDLE,
-    Security::SECURITY_ATTRIBUTES,
-    Storage::FileSystem::{
-        CreateFileA, FILE_ACCESS_FLAGS, FILE_FLAGS_AND_ATTRIBUTES, FILE_GENERIC_READ,
-        FILE_GENERIC_WRITE, FILE_SHARE_WRITE, OPEN_EXISTING,
-    },
-};
-
-    //trying to get handle to console buffer
-    unsafe {
-        let console_file_handle = CreateFileA(
-            "CONOUT$",
-            FILE_GENERIC_READ | FILE_GENERIC_WRITE,
-            FILE_SHARE_WRITE,
-            &SECURITY_ATTRIBUTES::default(),
-            OPEN_EXISTING,
-            FILE_FLAGS_AND_ATTRIBUTES::default(),
-            HANDLE::default(),
-        )
-        .unwrap();
-    }
+1|2|3|C|  =>  |1|2|3|4|
+4|5|6|D|  =>  |Q|W|E|R|
+7|8|9|E|  =>  |A|S|D|F|
+A|0|B|F|  =>  |Z|X|C|V|
