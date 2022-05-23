@@ -58,6 +58,7 @@ fn fill_input(kb: &mut [u8]) {
     kb[0x8] = is_key_down(KeyCode::S) as u8;
     kb[0x9] = is_key_down(KeyCode::D) as u8;
     kb[0xA] = is_key_down(KeyCode::Z) as u8;
+    kb[0xB] = is_key_down(KeyCode::C) as u8;
     kb[0xC] = is_key_down(KeyCode::Key4) as u8;
     kb[0xD] = is_key_down(KeyCode::R) as u8;
     kb[0xE] = is_key_down(KeyCode::F) as u8;
