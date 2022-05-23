@@ -2,6 +2,20 @@
 
 use rand::Rng;
 
+#[derive(Debug)]
+pub enum Chip8Error {
+    FileNotFound,
+}
+
+impl std::fmt::Display for Chip8Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Chip8Error::FileNotFound => "File not found"
+        })
+    }
+}
+
+
 pub enum Computer {
     Normal,
     Eti,
@@ -70,27 +84,17 @@ fn get_nibble(n: u8, addr: u16) -> u16 {
     }
 }
 
-// fn get_nibbles(s: u8, e: u8, addr: u16) -> u16 {
-//     //(1,2,add) => addr & 0FF0 >> 4
-
-//     //addr >> e << s
-
-//     // s :1, e: 2
-//     //0xABCD
-
-//     ((0xFFFF >> s) & addr) >> (4 * (3 - e))
-// }
 
 pub struct Chip8 {
     pub ram: [u8; 4096],
     regs: [u8; 16],   //general purpose registers. but the last one is reserved
     ireg: u16,        //i reg. used to store memory addresses
     dreg: u8,         // delay timer register
-    sreg: u8,         // sound timer register
+    pub sreg: u8,     // sound timer register
     pc: u16,          // program counter
     sp: u8,           // stack pointer (index to stack)
     stack: [u16; 16], // stack. array of pointers
-    pub kb: [u8; 16],     // the keyboard
+    pub kb: [u8; 16], // the keyboard
     pub display: [u8; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize],
     rng: rand::rngs::ThreadRng,
 }
@@ -115,27 +119,8 @@ impl Chip8 {
         }
     }
 
-    //pixel on '█'
-    //pixel off '░'
-    pub fn draw(&self) {
-        let mut screen: String = String::new();
-
-        for i in 0..DISPLAY_HEIGHT {
-            for j in 0..DISPLAY_WIDTH {
-                if self.display[(i as u32 * DISPLAY_WIDTH as u32 + j as u32) as usize] != 0 {
-                    screen += "█";
-                } else {
-                    screen += "░";
-                }
-            }
-            screen += "\n";
-        }
-
-        println!("{}", screen);
-    }
-
-    pub fn load_rom(&mut self, path: String) {
-        let the_file: Vec<u8> = std::fs::read(path).unwrap();
+    pub fn load_rom(&mut self, path: String) -> Result<(), Chip8Error> {
+        let the_file: Vec<u8> = std::fs::read(path).map_err(|_| Chip8Error::FileNotFound)?;
 
         for (dst, src) in self
             .ram
@@ -145,6 +130,8 @@ impl Chip8 {
         {
             *dst = *src;
         }
+
+        Ok(())
     }
 
     //executes the instruction on pc and changes all the state
@@ -154,7 +141,10 @@ impl Chip8 {
             ((self.ram[self.pc as usize] as u16) << 8) | self.ram[self.pc as usize + 1] as u16;
 
         if self.dreg > 0 {
-            self.dreg -= 1;
+            self.dreg = self.dreg.saturating_sub(1);
+        }
+        if self.sreg > 0 {
+            self.sreg = self.sreg.saturating_sub(1);
         }
 
         //get the first nibble and pattern match it
@@ -590,6 +580,7 @@ impl Chip8 {
     /// ST is set equal to the value of Vx.
     fn LDS(&mut self, x: u8) {
         self.sreg = self.regs[x as usize];
+        println!("SETTING SOUND TIMER TO {}", self.sreg);
         self.pc += 2;
     }
 
@@ -685,3 +676,35 @@ fn test_g_nibs() {
 
     assert_eq!(thing, (0xb, 0x1a));
 }
+
+
+
+// fn get_nibbles(s: u8, e: u8, addr: u16) -> u16 {
+//     //(1,2,add) => addr & 0FF0 >> 4
+
+//     //addr >> e << s
+
+//     // s :1, e: 2
+//     //0xABCD
+
+//     ((0xFFFF >> s) & addr) >> (4 * (3 - e))
+// }
+
+    // //pixel on '█'
+    // //pixel off '░'
+    // pub fn draw(&self) {
+    //     let mut screen: String = String::new();
+
+    //     for i in 0..DISPLAY_HEIGHT {
+    //         for j in 0..DISPLAY_WIDTH {
+    //             if self.display[(i as u32 * DISPLAY_WIDTH as u32 + j as u32) as usize] != 0 {
+    //                 screen += "█";
+    //             } else {
+    //                 screen += "░";
+    //             }
+    //         }
+    //         screen += "\n";
+    //     }
+
+    //     println!("{}", screen);
+    // }

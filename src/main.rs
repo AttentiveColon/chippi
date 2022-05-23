@@ -1,9 +1,16 @@
 use macroquad::prelude::*;
+
+use std::env;
+use std::io::BufRead;
+use std::time::Duration;
+
+use std::thread::sleep;
+
 mod lib;
 
 const DEFAULT_PIXEL_SIZE: i32 = 20;
-const SPEED_MULTIPLIER: usize = 3;
-const ROM_FILENAME: &'static str = "roms/breakout.ch8";
+const DEFAULT_SPEED_MULTIPLIER: usize = 1;
+const DEFAULT_ROM_FILENAME: &'static str = "roms/brix.ch8";
 
 fn get_mq_conf() -> macroquad::prelude::Conf {
     //window config
@@ -58,15 +65,47 @@ fn fill_input(kb: &mut [u8]) {
 
 #[macroquad::main(get_mq_conf)]
 async fn main() {
+   
+    
     //TODO(lucypero): consider Chip8::from_rom() instead of new() and load_rom()
     let mut chip = lib::Chip8::new(lib::Computer::Normal);
-    chip.load_rom(ROM_FILENAME.into());
+
+    //processing args
+    let args: Vec<String> = env::args().collect();
+
+    let rom_filename = match args.get(1) {
+        Some(s) => s.clone(),
+        None => DEFAULT_ROM_FILENAME.to_string(),
+    };
+
+    let mut speed_multiplier = match args.get(2) {
+        Some(s) => match s.parse::<usize>() {
+            Ok(sp) => sp,
+            _ => panic!("Speed multiplier not valid."),
+        },
+        None => DEFAULT_SPEED_MULTIPLIER,
+    };
+
+    chip.load_rom(rom_filename).expect("Rom not found");
 
     loop {
+        if is_key_pressed(KeyCode::Key9) {
+            speed_multiplier += 1;
+        }
+
+        if is_key_pressed(KeyCode::Key8) {
+            speed_multiplier -= 1;
+        }
+
         clear_background(BLACK);
-        for _ in 0..SPEED_MULTIPLIER {
+        for _ in 0..speed_multiplier {
             fill_input(&mut chip.kb);
             chip.tick();
+
+            // if chip.sreg > 0 {
+            //     
+            // } else {
+            // }
         }
 
         draw_chip8_display(&chip.display);
