@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 rand = "0.8.5"
 macroquad = "0.3.6"
-rodio = "0.12.0"
+

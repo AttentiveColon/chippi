@@ -1,3 +1,4 @@
+use macroquad::audio::{load_sound, play_sound, PlaySoundParams};
 use macroquad::prelude::*;
 
 use std::env;
@@ -63,10 +64,15 @@ fn fill_input(kb: &mut [u8]) {
     kb[0xF] = is_key_down(KeyCode::V) as u8;
 }
 
+use macroquad::audio;
+
 #[macroquad::main(get_mq_conf)]
 async fn main() {
-   
-    
+    let sound = load_sound("tick.wav").await;
+    let sound = sound.unwrap();
+
+    let mut latch = true;
+
     //TODO(lucypero): consider Chip8::from_rom() instead of new() and load_rom()
     let mut chip = lib::Chip8::new(lib::Computer::Normal);
 
@@ -102,10 +108,16 @@ async fn main() {
             fill_input(&mut chip.kb);
             chip.tick();
 
-            // if chip.sreg > 0 {
-            //     
-            // } else {
-            // }
+            if latch && chip.sreg > 0 {
+                let sound_params = PlaySoundParams {
+                    looped: false,
+                    volume: 0.5,
+                };
+                play_sound(sound, sound_params);
+                latch = false;
+            } else {
+                latch = true;
+            }
         }
 
         draw_chip8_display(&chip.display);
