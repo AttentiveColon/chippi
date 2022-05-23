@@ -9,12 +9,15 @@ pub enum Chip8Error {
 
 impl std::fmt::Display for Chip8Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Chip8Error::FileNotFound => "File not found"
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Chip8Error::FileNotFound => "File not found",
+            }
+        )
     }
 }
-
 
 pub enum Computer {
     Normal,
@@ -83,7 +86,6 @@ fn get_nibble(n: u8, addr: u16) -> u16 {
         _ => addr & 0x000F,
     }
 }
-
 
 pub struct Chip8 {
     pub ram: [u8; 4096],
@@ -580,7 +582,6 @@ impl Chip8 {
     /// ST is set equal to the value of Vx.
     fn LDS(&mut self, x: u8) {
         self.sreg = self.regs[x as usize];
-        println!("SETTING SOUND TIMER TO {}", self.sreg);
         self.pc += 2;
     }
 
@@ -677,8 +678,6 @@ fn test_g_nibs() {
     assert_eq!(thing, (0xb, 0x1a));
 }
 
-
-
 // fn get_nibbles(s: u8, e: u8, addr: u16) -> u16 {
 //     //(1,2,add) => addr & 0FF0 >> 4
 
@@ -690,21 +689,21 @@ fn test_g_nibs() {
 //     ((0xFFFF >> s) & addr) >> (4 * (3 - e))
 // }
 
-    // //pixel on '█'
-    // //pixel off '░'
-    // pub fn draw(&self) {
-    //     let mut screen: String = String::new();
+// //pixel on '█'
+// //pixel off '░'
+// pub fn draw(&self) {
+//     let mut screen: String = String::new();
 
-    //     for i in 0..DISPLAY_HEIGHT {
-    //         for j in 0..DISPLAY_WIDTH {
-    //             if self.display[(i as u32 * DISPLAY_WIDTH as u32 + j as u32) as usize] != 0 {
-    //                 screen += "█";
-    //             } else {
-    //                 screen += "░";
-    //             }
-    //         }
-    //         screen += "\n";
-    //     }
+//     for i in 0..DISPLAY_HEIGHT {
+//         for j in 0..DISPLAY_WIDTH {
+//             if self.display[(i as u32 * DISPLAY_WIDTH as u32 + j as u32) as usize] != 0 {
+//                 screen += "█";
+//             } else {
+//                 screen += "░";
+//             }
+//         }
+//         screen += "\n";
+//     }
 
-    //     println!("{}", screen);
-    // }
+//     println!("{}", screen);
+// }
