@@ -116,7 +116,7 @@ async fn main() {
                 };
                 play_sound(sound, sound_params);
                 latch = false;
-            } else {
+            } else if chip.sreg == 0 {
                 latch = true;
             }
         }
