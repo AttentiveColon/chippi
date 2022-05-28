@@ -21,7 +21,7 @@ pub struct Program {
     speed_multiplier: usize,
     sound: Sound,
     rom_filename: String,
-    
+    latch: bool,
 }
 
 impl Program {
@@ -33,20 +33,17 @@ impl Program {
             speed_multiplier: speed_multiplier,
             sound: sound,
             rom_filename: rom_filename,
+            latch: true,
         }
     }
 
     pub async fn run(&mut self) -> bool {
-        let mut latch = true;
-        loop {
-            if !process_sys_input(&mut self.speed_multiplier) {
-                break;
-            }
+        while process_sys_input(&mut self.speed_multiplier) {
             clear_background(BLACK);
             for _ in 0..self.speed_multiplier {
                 fill_chip_input(&mut self.chip.kb);
                 self.chip.tick();
-                process_audio(&mut latch, &self.chip, self.sound, SOUND_PARAMS);
+                process_audio(&mut self.latch, &self.chip, self.sound, SOUND_PARAMS);
             }
             draw_chip8_display(&self.chip.display);
             next_frame().await
