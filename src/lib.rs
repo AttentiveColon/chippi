@@ -4,13 +4,56 @@ use rand::Rng;
 use std::env;
 
 use macroquad::audio::{Sound, PlaySoundParams, load_sound, play_sound};
-use macroquad::prelude::{is_key_pressed, is_key_down, KeyCode, draw_rectangle, screen_width};
-use macroquad::prelude::{GREEN};
+use macroquad::prelude::{is_key_pressed, is_key_down, KeyCode, draw_rectangle, screen_width, clear_background, next_frame};
+use macroquad::prelude::{GREEN, BLACK};
 
-const DEFAULT_PIXEL_SIZE: i32 = 20;
-const DEFAULT_SPEED_MULTIPLIER: usize = 1;
-const DEFAULT_ROM_FILENAME: &'static str = "roms/brix.ch8";
-const AUDIO_FILE: &str = "tick.wav";
+pub const DEFAULT_PIXEL_SIZE: i32 = 20;
+pub const DEFAULT_SPEED_MULTIPLIER: usize = 1;
+pub const DEFAULT_ROM_FILENAME: &'static str = "roms/brix.ch8";
+pub const AUDIO_FILE: &str = "tick.wav";
+pub const SOUND_PARAMS: PlaySoundParams = PlaySoundParams {
+    looped: false,
+    volume: 0.5,
+};
+
+pub struct Program {
+    chip: Chip8,
+    speed_multiplier: usize,
+    sound: Sound,
+    rom_filename: String,
+    
+}
+
+impl Program {
+    pub fn init(rom_filename: String, speed_multiplier: usize, sound: Sound) -> Program {
+        let chip = Chip8::from_rom(Computer::Normal, rom_filename.clone());
+
+        Program {
+            chip: chip,
+            speed_multiplier: speed_multiplier,
+            sound: sound,
+            rom_filename: rom_filename,
+        }
+    }
+
+    pub async fn run(&mut self) -> bool {
+        let mut latch = true;
+        loop {
+            if !process_sys_input(&mut self.speed_multiplier) {
+                break;
+            }
+            clear_background(BLACK);
+            for _ in 0..self.speed_multiplier {
+                fill_chip_input(&mut self.chip.kb);
+                self.chip.tick();
+                process_audio(&mut latch, &self.chip, self.sound, SOUND_PARAMS);
+            }
+            draw_chip8_display(&self.chip.display);
+            next_frame().await
+        }
+        false
+    }
+}
 
 
 pub async fn process_env_variables() -> (String, usize, Sound) {
@@ -40,7 +83,7 @@ pub fn process_audio(latch: &mut bool, chip: &Chip8, sound: Sound, sound_params:
     }
 }
 
-pub fn process_sys_input(speed_multiplier: &mut usize) {
+pub fn process_sys_input(speed_multiplier: &mut usize) -> bool {
     if is_key_pressed(KeyCode::Key9) {
         *speed_multiplier += 1;
     }
@@ -48,8 +91,9 @@ pub fn process_sys_input(speed_multiplier: &mut usize) {
         *speed_multiplier -= 1;
     }
     if is_key_pressed(KeyCode::Escape) {
-        std::process::exit(0);
+        return false;
     }
+    true
 }
 
 pub fn fill_chip_input(kb: &mut [u8]) {
