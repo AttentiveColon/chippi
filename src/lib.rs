@@ -1,6 +1,97 @@
 #![allow(dead_code, non_snake_case)]
 
 use rand::Rng;
+use std::env;
+
+use macroquad::audio::{Sound, PlaySoundParams, load_sound, play_sound};
+use macroquad::prelude::{is_key_pressed, is_key_down, KeyCode, draw_rectangle, screen_width};
+use macroquad::prelude::{GREEN};
+
+const DEFAULT_PIXEL_SIZE: i32 = 20;
+const DEFAULT_SPEED_MULTIPLIER: usize = 1;
+const DEFAULT_ROM_FILENAME: &'static str = "roms/brix.ch8";
+const AUDIO_FILE: &str = "tick.wav";
+
+
+pub async fn process_env_variables() -> (String, usize, Sound) {
+    let args: Vec<String> = env::args().collect();
+    let rom_filename = match args.get(1) {
+        Some(s) => s.clone(),
+        None => DEFAULT_ROM_FILENAME.to_string(),
+    };
+    let speed_multiplier = match args.get(2) {
+        Some(s) => match s.parse::<usize>() {
+            Ok(sp) => sp,
+            _ => panic!("Speed multiplier not valid"),
+        },
+        None => DEFAULT_SPEED_MULTIPLIER,
+    };
+    let sound = load_sound(AUDIO_FILE).await.unwrap();
+
+    (rom_filename, speed_multiplier, sound)
+}
+
+pub fn process_audio(latch: &mut bool, chip: &Chip8, sound: Sound, sound_params: PlaySoundParams) {
+    if *latch && chip.sreg > 0  {
+        play_sound(sound, sound_params);
+        *latch = false;
+    } else if chip.sreg == 0 {
+        *latch = true;
+    }
+}
+
+pub fn process_sys_input(speed_multiplier: &mut usize) {
+    if is_key_pressed(KeyCode::Key9) {
+        *speed_multiplier += 1;
+    }
+    if is_key_pressed(KeyCode::Key8) {
+        *speed_multiplier -= 1;
+    }
+    if is_key_pressed(KeyCode::Escape) {
+        std::process::exit(0);
+    }
+}
+
+pub fn fill_chip_input(kb: &mut [u8]) {
+    kb[0x0] = is_key_down(KeyCode::X) as u8;
+    kb[0x1] = is_key_down(KeyCode::Key1) as u8;
+    kb[0x2] = is_key_down(KeyCode::Key2) as u8;
+    kb[0x3] = is_key_down(KeyCode::Key3) as u8;
+    kb[0x4] = is_key_down(KeyCode::Q) as u8;
+    kb[0x5] = is_key_down(KeyCode::W) as u8;
+    kb[0x6] = is_key_down(KeyCode::E) as u8;
+    kb[0x7] = is_key_down(KeyCode::A) as u8;
+    kb[0x8] = is_key_down(KeyCode::S) as u8;
+    kb[0x9] = is_key_down(KeyCode::D) as u8;
+    kb[0xA] = is_key_down(KeyCode::Z) as u8;
+    kb[0xB] = is_key_down(KeyCode::C) as u8;
+    kb[0xC] = is_key_down(KeyCode::Key4) as u8;
+    kb[0xD] = is_key_down(KeyCode::R) as u8;
+    kb[0xE] = is_key_down(KeyCode::F) as u8;
+    kb[0xF] = is_key_down(KeyCode::V) as u8;
+}
+
+pub fn draw_chip8_display(display: &[u8]) {
+    const DISPLAYWIDTH: usize = DISPLAY_WIDTH as usize;
+    const DISPLAYHEIGHT: usize = DISPLAY_HEIGHT as usize;
+
+    for y in 0..DISPLAYHEIGHT as usize {
+        for x in 0..DISPLAYWIDTH as usize {
+            if display[y * DISPLAYWIDTH as usize + x] != 0 {
+                let sw = screen_width();
+                let pixel_size = sw as usize / DISPLAYWIDTH;
+
+                draw_rectangle(
+                    (x * pixel_size) as f32,
+                    (y * pixel_size) as f32,
+                    pixel_size as f32,
+                    pixel_size as f32,
+                    GREEN,
+                );
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum Chip8Error {
@@ -119,6 +210,27 @@ impl Chip8 {
             } as u16,
             rng: rand::thread_rng(),
         }
+    }
+
+    pub fn from_rom(comp: Computer, rom: String) -> Chip8 {
+        let mut chip8 = Chip8 { 
+            ram: load_text(TEXT_MEMORY_START), 
+            regs: [0x0; 16], 
+            ireg: 0x00, 
+            dreg: 0x00, 
+            sreg: 0x0, 
+            pc: match comp { 
+                Computer::Normal => PROGRAM_START_LOCATION, 
+                Computer::Eti => ETI_PROGRAM_START_LOCATION
+            } as u16, 
+            sp: 0x0, 
+            stack: [0x00; 16], 
+            kb: [0x0; 16], 
+            display: [0; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize], 
+            rng: rand::thread_rng() 
+        };
+        chip8.load_rom(rom).expect("Couldn't Load Rom");
+        chip8
     }
 
     pub fn load_rom(&mut self, path: String) -> Result<(), Chip8Error> {
