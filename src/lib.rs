@@ -3,9 +3,12 @@
 use rand::Rng;
 use std::env;
 
-use macroquad::audio::{Sound, PlaySoundParams, load_sound, play_sound};
-use macroquad::prelude::{is_key_pressed, is_key_down, KeyCode, draw_rectangle, screen_width, clear_background, next_frame};
-use macroquad::prelude::{GREEN, BLACK};
+use macroquad::audio::{load_sound, play_sound, PlaySoundParams, Sound};
+use macroquad::prelude::{
+    clear_background, draw_rectangle, is_key_down, is_key_pressed, next_frame, screen_width, Color,
+    KeyCode,
+};
+use macroquad::prelude::{BLACK, BLUE, GREEN, RED, WHITE, YELLOW};
 
 pub const DEFAULT_PIXEL_SIZE: i32 = 20;
 pub const DEFAULT_SPEED_MULTIPLIER: usize = 1;
@@ -16,29 +19,44 @@ pub const SOUND_PARAMS: PlaySoundParams = PlaySoundParams {
     volume: 0.5,
 };
 
+const ALL_COLORS: [Color; 5] = [WHITE, RED, GREEN, BLUE, YELLOW];
+
 pub struct Program {
     chip: Chip8,
     speed_multiplier: usize,
+    color: usize,
     sound: Sound,
     rom_filename: String,
     latch: bool,
+    rainbow_mode: bool,
+    frame_counter: i64,
 }
 
 impl Program {
-    pub fn init(rom_filename: String, speed_multiplier: usize, sound: Sound) -> Program {
+    pub fn init(
+        rom_filename: String,
+        speed_multiplier: usize,
+        sound: Sound,
+        rainbow_mode: bool,
+    ) -> Program {
         let chip = Chip8::from_rom(Computer::Normal, rom_filename.clone());
 
         Program {
-            chip: chip,
-            speed_multiplier: speed_multiplier,
-            sound: sound,
-            rom_filename: rom_filename,
+            chip,
+            speed_multiplier,
+            sound,
+            color: 0,
+            rom_filename,
+            rainbow_mode,
             latch: true,
+            frame_counter: 0,
         }
     }
 
     pub async fn run(&mut self) -> bool {
         while self.process_sys_input() {
+            self.frame_counter += 1;
+
             clear_background(BLACK);
             for _ in 0..self.speed_multiplier {
                 self.fill_chip_input();
@@ -51,12 +69,22 @@ impl Program {
         false
     }
 
+    fn increase_color(&mut self) {
+        self.color += 1;
+        if self.color > ALL_COLORS.len() - 1 {
+            self.color = 0;
+        }
+    }
+
     fn process_sys_input(&mut self) -> bool {
         if is_key_pressed(KeyCode::Key9) {
             self.speed_multiplier += 1;
         }
         if is_key_pressed(KeyCode::Key8) {
             self.speed_multiplier -= 1;
+        }
+        if is_key_pressed(KeyCode::Key0) {
+            self.increase_color()
         }
         if is_key_pressed(KeyCode::Escape) {
             return false;
@@ -92,9 +120,21 @@ impl Program {
         }
     }
 
+    fn get_color(&mut self) -> Color {
+        if self.rainbow_mode {
+            if self.frame_counter % 10 == 0 {
+                self.increase_color();
+            }
+        }
+
+        ALL_COLORS[self.color]
+    }
+
     fn draw_chip8_display(&mut self) {
         const DISPLAYWIDTH: usize = DISPLAY_WIDTH as usize;
         const DISPLAYHEIGHT: usize = DISPLAY_HEIGHT as usize;
+
+        let color = self.get_color();
 
         for y in 0..DISPLAYHEIGHT as usize {
             for x in 0..DISPLAYWIDTH as usize {
@@ -107,7 +147,7 @@ impl Program {
                         (y * pixel_size) as f32,
                         pixel_size as f32,
                         pixel_size as f32,
-                        GREEN,
+                        color,
                     );
                 }
             }
@@ -115,8 +155,7 @@ impl Program {
     }
 }
 
-
-pub async fn process_env_variables() -> (String, usize, Sound) {
+pub async fn process_env_variables() -> (String, usize, Sound, bool) {
     let args: Vec<String> = env::args().collect();
     let rom_filename = match args.get(1) {
         Some(s) => s.clone(),
@@ -129,9 +168,13 @@ pub async fn process_env_variables() -> (String, usize, Sound) {
         },
         None => DEFAULT_SPEED_MULTIPLIER,
     };
+    let rainbow_mode = match args.get(3) {
+        Some(_s) => true,
+        None => false,
+    };
     let sound = load_sound(AUDIO_FILE).await.unwrap();
 
-    (rom_filename, speed_multiplier, sound)
+    (rom_filename, speed_multiplier, sound, rainbow_mode)
 }
 
 #[derive(Debug)]
@@ -254,21 +297,21 @@ impl Chip8 {
     }
 
     pub fn from_rom(comp: Computer, rom: String) -> Chip8 {
-        let mut chip8 = Chip8 { 
-            ram: load_text(TEXT_MEMORY_START), 
-            regs: [0x0; 16], 
-            ireg: 0x00, 
-            dreg: 0x00, 
-            sreg: 0x0, 
-            pc: match comp { 
-                Computer::Normal => PROGRAM_START_LOCATION, 
-                Computer::Eti => ETI_PROGRAM_START_LOCATION
-            } as u16, 
-            sp: 0x0, 
-            stack: [0x00; 16], 
-            kb: [0x0; 16], 
-            display: [0; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize], 
-            rng: rand::thread_rng() 
+        let mut chip8 = Chip8 {
+            ram: load_text(TEXT_MEMORY_START),
+            regs: [0x0; 16],
+            ireg: 0x00,
+            dreg: 0x00,
+            sreg: 0x0,
+            pc: match comp {
+                Computer::Normal => PROGRAM_START_LOCATION,
+                Computer::Eti => ETI_PROGRAM_START_LOCATION,
+            } as u16,
+            sp: 0x0,
+            stack: [0x00; 16],
+            kb: [0x0; 16],
+            display: [0; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize],
+            rng: rand::thread_rng(),
         };
         chip8.load_rom(rom).expect("Couldn't Load Rom");
         chip8

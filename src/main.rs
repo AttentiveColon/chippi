@@ -13,7 +13,7 @@ fn get_mq_conf() -> macroquad::prelude::Conf {
 
 #[macroquad::main(get_mq_conf)]
 async fn main() {
-    let (rom_filename, speed_multiplier, sound) = lib::process_env_variables().await;
-    let mut program = lib::Program::init(rom_filename, speed_multiplier, sound);
+    let (rom_filename, speed_multiplier, sound, rainbow_mode) = lib::process_env_variables().await;
+    let mut program = lib::Program::init(rom_filename, speed_multiplier, sound, rainbow_mode);
     while program.run().await {}
 }
