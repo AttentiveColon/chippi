@@ -1,7 +1,7 @@
 Todo:
 
 - fancier display (dots w blur and stuff idk)
-- do more sounds (based on length of sound register)
+X do more sounds (based on length of sound register)
 X do something about the casting
 X refactor all the chip8 stuff
     X single parameter per function call (cleaned function calls)

@@ -13,7 +13,9 @@ use macroquad::prelude::{BLACK, BLUE, GREEN, RED, WHITE, YELLOW};
 pub const DEFAULT_PIXEL_SIZE: i32 = 20;
 pub const DEFAULT_SPEED_MULTIPLIER: usize = 1;
 pub const DEFAULT_ROM_FILENAME: &'static str = "roms/brix.ch8";
-pub const AUDIO_FILE: &str = "audio/tick.wav";
+pub const BUZZ1: &str = "audio/buzz1.wav";
+pub const BUZZ2: &str = "audio/buzz2.wav";
+pub const BUZZ3: &str = "audio/buzz3.wav";
 pub const SOUND_PARAMS: PlaySoundParams = PlaySoundParams {
     looped: false,
     volume: 0.5,
@@ -25,7 +27,7 @@ pub struct Program {
     chip: Chip8,
     speed_multiplier: usize,
     color: usize,
-    sound: Sound,
+    sound: [Sound; 3],
     rom_filename: String,
     latch: bool,
     rainbow_mode: bool,
@@ -36,7 +38,7 @@ impl Program {
     pub fn init(
         rom_filename: String,
         speed_multiplier: usize,
-        sound: Sound,
+        sound: [Sound; 3],
         rainbow_mode: bool,
     ) -> Program {
         let chip = Chip8::from_rom(Computer::Normal, rom_filename.clone());
@@ -115,7 +117,13 @@ impl Program {
 
     fn process_audio(&mut self) {
         if self.latch && self.chip.sreg > 0 {
-            play_sound(self.sound, SOUND_PARAMS);
+            if self.chip.sreg >= 10 {
+                play_sound(self.sound[2], SOUND_PARAMS);
+            } else if self.chip.sreg >= 4 {
+                play_sound(self.sound[1], SOUND_PARAMS);
+            } else {
+                play_sound(self.sound[0], SOUND_PARAMS);
+            }
             self.latch = false;
         } else if self.chip.sreg == 0 {
             self.latch = true;
@@ -157,7 +165,7 @@ impl Program {
     }
 }
 
-pub async fn process_env_variables() -> (String, usize, Sound, bool) {
+pub async fn process_env_variables() -> (String, usize, [Sound; 3], bool) {
     let args: Vec<String> = env::args().collect();
     let rom_filename = match args.get(1) {
         Some(s) => s.clone(),
@@ -174,7 +182,11 @@ pub async fn process_env_variables() -> (String, usize, Sound, bool) {
         Some(_s) => true,
         None => false,
     };
-    let sound = load_sound(AUDIO_FILE).await.unwrap();
+    let sound: [Sound; 3] = [
+        load_sound(BUZZ1).await.unwrap(),
+        load_sound(BUZZ2).await.unwrap(),
+        load_sound(BUZZ3).await.unwrap(),
+    ];
 
     (rom_filename, speed_multiplier, sound, rainbow_mode)
 }
