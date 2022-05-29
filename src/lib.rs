@@ -13,7 +13,7 @@ use macroquad::prelude::{BLACK, BLUE, GREEN, RED, WHITE, YELLOW};
 pub const DEFAULT_PIXEL_SIZE: i32 = 20;
 pub const DEFAULT_SPEED_MULTIPLIER: usize = 1;
 pub const DEFAULT_ROM_FILENAME: &'static str = "roms/brix.ch8";
-pub const AUDIO_FILE: &str = "tick.wav";
+pub const AUDIO_FILE: &str = "audio/tick.wav";
 pub const SOUND_PARAMS: PlaySoundParams = PlaySoundParams {
     looped: false,
     volume: 0.5,
@@ -29,7 +29,7 @@ pub struct Program {
     rom_filename: String,
     latch: bool,
     rainbow_mode: bool,
-    frame_counter: i64,
+    frame_counter: u8,
 }
 
 impl Program {
@@ -55,7 +55,7 @@ impl Program {
 
     pub async fn run(&mut self) -> bool {
         while self.process_sys_input() {
-            self.frame_counter += 1;
+            self.frame_counter = self.frame_counter.wrapping_add(1);
 
             clear_background(BLACK);
             for _ in 0..self.speed_multiplier {
@@ -78,10 +78,12 @@ impl Program {
 
     fn process_sys_input(&mut self) -> bool {
         if is_key_pressed(KeyCode::Key9) {
-            self.speed_multiplier += 1;
+            if self.speed_multiplier < 10 {
+                self.speed_multiplier += 1;
+            }
         }
         if is_key_pressed(KeyCode::Key8) {
-            self.speed_multiplier -= 1;
+            self.speed_multiplier = self.speed_multiplier.saturating_sub(1);
         }
         if is_key_pressed(KeyCode::Key0) {
             self.increase_color()
@@ -199,25 +201,6 @@ pub enum Computer {
     Eti,
 }
 
-pub enum Nibble {
-    Second,
-    Third,
-    Last,
-    Byte,
-    Address,
-}
-
-//0xabcd
-fn g_nib(nib: Nibble, addr: u16) -> u16 {
-    match nib {
-        Nibble::Second => (addr >> 8) & 0xF,
-        Nibble::Third => (addr >> 4) & 0xF,
-        Nibble::Last => addr & 0xF,
-        Nibble::Byte => addr & 0xFF,
-        Nibble::Address => addr & 0xFFF,
-    }
-}
-
 const PROGRAM_START_LOCATION: usize = 0x200;
 const ETI_PROGRAM_START_LOCATION: usize = 0x600;
 const TEXT_MEMORY_START: usize = 0x000;
@@ -253,13 +236,28 @@ fn load_text(offset: usize) -> [u8; 4096] {
     ram
 }
 
-fn get_nibble(n: u8, addr: u16) -> u16 {
-    match n {
-        0 => (addr & 0xF000) >> 12,
-        1 => (addr & 0x0F00) >> 8,
-        2 => (addr & 0x00F0) >> 4,
-        _ => addr & 0x000F,
+pub enum Nibble {
+    First,
+    Last,
+    Byte,
+}
+
+fn get_nibble(nib: Nibble, addr: u16) -> u16 {
+    match nib {
+        Nibble::First => (addr & 0xF000) >> 12,
+        Nibble::Last => addr & 0xF,
+        Nibble::Byte => addr & 0xFF,
     }
+}
+
+fn get_bits(addr: u16) -> (u8, u8, u8, u8, u16) {
+    (
+        ((addr >> 8) & 0xf) as u8,
+        ((addr >> 4) & 0xf) as u8,
+        (addr & 0xf) as u8,
+        (addr & 0xff) as u8,
+        addr & 0xFFF,
+    )
 }
 
 pub struct Chip8 {
@@ -345,110 +343,54 @@ impl Chip8 {
             self.sreg = self.sreg.saturating_sub(1);
         }
 
+        let (x, y, n, kk, nnn) = get_bits(instruction);
+
         //get the first nibble and pattern match it
-        match get_nibble(0, instruction) {
-            0x0 => {
-                //this can be 1 of 3 instr
-                match instruction {
-                    //CLS
-                    0x00E0 => self.CLS(),
-                    //RET
-                    0x00EE => self.RET(),
-                    //SYS
-                    _ => self.SYS(g_nib(Nibble::Address, instruction)),
-                }
-            }
-            0x1 => self.JP(g_nib(Nibble::Address, instruction)),
-            0x2 => self.CALL(g_nib(Nibble::Address, instruction)),
-            0x3 => self.SE(
-                g_nib(Nibble::Second, instruction) as u8,
-                g_nib(Nibble::Byte, instruction) as u8,
-            ),
-            0x4 => self.SNE(
-                g_nib(Nibble::Second, instruction) as u8,
-                g_nib(Nibble::Byte, instruction) as u8,
-            ),
-            0x5 => self.SER(
-                g_nib(Nibble::Second, instruction) as u8,
-                g_nib(Nibble::Third, instruction) as u8,
-            ),
-            0x6 => self.LD(
-                g_nib(Nibble::Second, instruction) as u8,
-                g_nib(Nibble::Byte, instruction) as u8,
-            ),
-            0x7 => self.ADD(
-                g_nib(Nibble::Second, instruction) as u8,
-                g_nib(Nibble::Byte, instruction) as u8,
-            ),
-            0x8 => match g_nib(Nibble::Last, instruction) {
-                0x0 => self.LDR(
-                    g_nib(Nibble::Second, instruction) as u8 as u8,
-                    g_nib(Nibble::Third, instruction) as u8,
-                ),
-                0x1 => self.OR(
-                    g_nib(Nibble::Second, instruction) as u8,
-                    g_nib(Nibble::Third, instruction) as u8,
-                ),
-                0x2 => self.AND(
-                    g_nib(Nibble::Second, instruction) as u8,
-                    g_nib(Nibble::Third, instruction) as u8,
-                ),
-                0x3 => self.XOR(
-                    g_nib(Nibble::Second, instruction) as u8,
-                    g_nib(Nibble::Third, instruction) as u8,
-                ),
-                0x4 => self.ADDR(
-                    g_nib(Nibble::Second, instruction) as u8,
-                    g_nib(Nibble::Third, instruction) as u8,
-                ),
-                0x5 => self.SUB(
-                    g_nib(Nibble::Second, instruction) as u8,
-                    g_nib(Nibble::Third, instruction) as u8,
-                ),
-                0x6 => self.SHR(
-                    g_nib(Nibble::Second, instruction) as u8,
-                    g_nib(Nibble::Third, instruction) as u8,
-                ),
-                0x7 => self.SUBN(
-                    g_nib(Nibble::Second, instruction) as u8,
-                    g_nib(Nibble::Third, instruction) as u8,
-                ),
-                0xE => self.SHL(
-                    g_nib(Nibble::Second, instruction) as u8,
-                    g_nib(Nibble::Third, instruction) as u8,
-                ),
+        match get_nibble(Nibble::First, instruction) {
+            0x0 => match instruction {
+                0x00E0 => self.CLS(),
+                0x00EE => self.RET(),
+                _ => self.SYS(nnn),
+            },
+            0x1 => self.JP(nnn),
+            0x2 => self.CALL(nnn),
+            0x3 => self.SE(x, kk),
+            0x4 => self.SNE(x, kk),
+            0x5 => self.SER(x, y),
+            0x6 => self.LD(x, kk),
+            0x7 => self.ADD(x, kk),
+            0x8 => match get_nibble(Nibble::Last, instruction) {
+                0x0 => self.LDR(x, y),
+                0x1 => self.OR(x, y),
+                0x2 => self.AND(x, y),
+                0x3 => self.XOR(x, y),
+                0x4 => self.ADDR(x, y),
+                0x5 => self.SUB(x, y),
+                0x6 => self.SHR(x, y),
+                0x7 => self.SUBN(x, y),
+                0xE => self.SHL(x, y),
                 _ => panic!(),
             },
-            0x9 => self.SNER(
-                g_nib(Nibble::Second, instruction) as u8,
-                g_nib(Nibble::Third, instruction) as u8,
-            ),
-            0xA => self.LDI(g_nib(Nibble::Address, instruction)),
-            0xB => self.JPO(g_nib(Nibble::Address, instruction)),
-            0xC => self.RND(
-                g_nib(Nibble::Second, instruction) as u8,
-                g_nib(Nibble::Byte, instruction) as u8,
-            ),
-            0xD => self.DRW(
-                g_nib(Nibble::Second, instruction) as u8,
-                g_nib(Nibble::Third, instruction) as u8,
-                g_nib(Nibble::Last, instruction) as u8,
-            ),
-            0xE => match g_nib(Nibble::Byte, instruction) {
-                0x9E => self.SKPK(g_nib(Nibble::Second, instruction) as u8),
-                0xA1 => self.SKNPK(g_nib(Nibble::Second, instruction) as u8),
+            0x9 => self.SNER(x, y),
+            0xA => self.LDI(nnn),
+            0xB => self.JPO(nnn),
+            0xC => self.RND(x, kk),
+            0xD => self.DRW(x, y, n),
+            0xE => match get_nibble(Nibble::Byte, instruction) {
+                0x9E => self.SKPK(x),
+                0xA1 => self.SKNPK(x),
                 _ => panic!(),
             },
-            0xF => match g_nib(Nibble::Byte, instruction) {
-                0x07 => self.LDT(g_nib(Nibble::Second, instruction) as u8),
-                0x0A => self.LDK(g_nib(Nibble::Second, instruction) as u8),
-                0x15 => self.LDD(g_nib(Nibble::Second, instruction) as u8),
-                0x18 => self.LDS(g_nib(Nibble::Second, instruction) as u8),
-                0x1E => self.ADDI(g_nib(Nibble::Second, instruction) as u8),
-                0x29 => self.LDF(g_nib(Nibble::Second, instruction) as u8),
-                0x33 => self.LDB(g_nib(Nibble::Second, instruction) as u8),
-                0x55 => self.LDIX(g_nib(Nibble::Second, instruction) as u8),
-                0x65 => self.LDRX(g_nib(Nibble::Second, instruction) as u8),
+            0xF => match get_nibble(Nibble::Byte, instruction) {
+                0x07 => self.LDT(x),
+                0x0A => self.LDK(x),
+                0x15 => self.LDD(x),
+                0x18 => self.LDS(x),
+                0x1E => self.ADDI(x),
+                0x29 => self.LDF(x),
+                0x33 => self.LDB(x),
+                0x55 => self.LDIX(x),
+                0x65 => self.LDRX(x),
                 _ => panic!(),
             },
             _ => panic!(),
@@ -837,15 +779,15 @@ impl Chip8 {
     }
 }
 
-#[test]
-fn tests() {
-    let addr: u16 = 0xABCD;
+// #[test]
+// fn tests() {
+//     let addr: u16 = 0xABCD;
 
-    assert_eq!(get_nibble(0, addr), 0xA);
-    assert_eq!(get_nibble(1, addr), 0xB);
-    assert_eq!(get_nibble(2, addr), 0xC);
-    assert_eq!(get_nibble(3, addr), 0xD);
-}
+//     assert_eq!(get_nibble(0, addr), 0xA);
+//     assert_eq!(get_nibble(1, addr), 0xB);
+//     assert_eq!(get_nibble(2, addr), 0xC);
+//     assert_eq!(get_nibble(3, addr), 0xD);
+// }
 
 // #[test]
 // fn test_get_nibbles() {
@@ -856,23 +798,23 @@ fn tests() {
 //     assert_eq!(get_nibbles(1, 3, addr), 0xBCD);
 // }
 
-#[test]
-fn test_g_nibs() {
-    let addr: u16 = 0xABCD;
-    assert_eq!(g_nib(Nibble::Second, addr), 0xB);
-    assert_eq!(g_nib(Nibble::Third, addr), 0xC);
-    assert_eq!(g_nib(Nibble::Last, addr), 0xD);
-    assert_eq!(g_nib(Nibble::Byte, addr), 0xCD);
-    assert_eq!(g_nib(Nibble::Address, addr), 0xBCD);
+// #[test]
+// fn test_g_nibs() {
+//     let addr: u16 = 0xABCD;
+//     assert_eq!(g_nib(Nibble::Second, addr), 0xB);
+//     assert_eq!(g_nib(Nibble::Third, addr), 0xC);
+//     assert_eq!(g_nib(Nibble::Last, addr), 0xD);
+//     assert_eq!(g_nib(Nibble::Byte, addr), 0xCD);
+//     assert_eq!(g_nib(Nibble::Address, addr), 0xBCD);
 
-    let addr: u16 = 0x6B1A;
+//     let addr: u16 = 0x6B1A;
 
-    let second = g_nib(Nibble::Second, addr);
-    let byte = g_nib(Nibble::Byte, addr);
-    let thing = (second, byte);
+//     let second = g_nib(Nibble::Second, addr);
+//     let byte = g_nib(Nibble::Byte, addr);
+//     let thing = (second, byte);
 
-    assert_eq!(thing, (0xb, 0x1a));
-}
+//     assert_eq!(thing, (0xb, 0x1a));
+// }
 
 // fn get_nibbles(s: u8, e: u8, addr: u16) -> u16 {
 //     //(1,2,add) => addr & 0FF0 >> 4
