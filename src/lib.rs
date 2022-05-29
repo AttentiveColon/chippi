@@ -38,17 +38,80 @@ impl Program {
     }
 
     pub async fn run(&mut self) -> bool {
-        while process_sys_input(&mut self.speed_multiplier) {
+        while self.process_sys_input() {
             clear_background(BLACK);
             for _ in 0..self.speed_multiplier {
-                fill_chip_input(&mut self.chip.kb);
+                self.fill_chip_input();
                 self.chip.tick();
-                process_audio(&mut self.latch, &self.chip, self.sound, SOUND_PARAMS);
+                self.process_audio();
             }
-            draw_chip8_display(&self.chip.display);
+            self.draw_chip8_display();
             next_frame().await
         }
         false
+    }
+
+    fn process_sys_input(&mut self) -> bool {
+        if is_key_pressed(KeyCode::Key9) {
+            self.speed_multiplier += 1;
+        }
+        if is_key_pressed(KeyCode::Key8) {
+            self.speed_multiplier -= 1;
+        }
+        if is_key_pressed(KeyCode::Escape) {
+            return false;
+        }
+        true
+    }
+
+    fn fill_chip_input(&mut self) {
+        self.chip.kb[0x0] = is_key_down(KeyCode::X) as u8;
+        self.chip.kb[0x1] = is_key_down(KeyCode::Key1) as u8;
+        self.chip.kb[0x2] = is_key_down(KeyCode::Key2) as u8;
+        self.chip.kb[0x3] = is_key_down(KeyCode::Key3) as u8;
+        self.chip.kb[0x4] = is_key_down(KeyCode::Q) as u8;
+        self.chip.kb[0x5] = is_key_down(KeyCode::W) as u8;
+        self.chip.kb[0x6] = is_key_down(KeyCode::E) as u8;
+        self.chip.kb[0x7] = is_key_down(KeyCode::A) as u8;
+        self.chip.kb[0x8] = is_key_down(KeyCode::S) as u8;
+        self.chip.kb[0x9] = is_key_down(KeyCode::D) as u8;
+        self.chip.kb[0xA] = is_key_down(KeyCode::Z) as u8;
+        self.chip.kb[0xB] = is_key_down(KeyCode::C) as u8;
+        self.chip.kb[0xC] = is_key_down(KeyCode::Key4) as u8;
+        self.chip.kb[0xD] = is_key_down(KeyCode::R) as u8;
+        self.chip.kb[0xE] = is_key_down(KeyCode::F) as u8;
+        self.chip.kb[0xF] = is_key_down(KeyCode::V) as u8;
+    }
+
+    fn process_audio(&mut self) {
+        if self.latch && self.chip.sreg > 0 {
+            play_sound(self.sound, SOUND_PARAMS);
+            self.latch = false;
+        } else if self.chip.sreg == 0 {
+            self.latch = true;
+        }
+    }
+
+    fn draw_chip8_display(&mut self) {
+        const DISPLAYWIDTH: usize = DISPLAY_WIDTH as usize;
+        const DISPLAYHEIGHT: usize = DISPLAY_HEIGHT as usize;
+
+        for y in 0..DISPLAYHEIGHT as usize {
+            for x in 0..DISPLAYWIDTH as usize {
+                if self.chip.display[y * DISPLAYWIDTH as usize + x] != 0 {
+                    let sw = screen_width();
+                    let pixel_size = sw as usize / DISPLAYWIDTH;
+
+                    draw_rectangle(
+                        (x * pixel_size) as f32,
+                        (y * pixel_size) as f32,
+                        pixel_size as f32,
+                        pixel_size as f32,
+                        GREEN,
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -69,69 +132,6 @@ pub async fn process_env_variables() -> (String, usize, Sound) {
     let sound = load_sound(AUDIO_FILE).await.unwrap();
 
     (rom_filename, speed_multiplier, sound)
-}
-
-pub fn process_audio(latch: &mut bool, chip: &Chip8, sound: Sound, sound_params: PlaySoundParams) {
-    if *latch && chip.sreg > 0  {
-        play_sound(sound, sound_params);
-        *latch = false;
-    } else if chip.sreg == 0 {
-        *latch = true;
-    }
-}
-
-pub fn process_sys_input(speed_multiplier: &mut usize) -> bool {
-    if is_key_pressed(KeyCode::Key9) {
-        *speed_multiplier += 1;
-    }
-    if is_key_pressed(KeyCode::Key8) {
-        *speed_multiplier -= 1;
-    }
-    if is_key_pressed(KeyCode::Escape) {
-        return false;
-    }
-    true
-}
-
-pub fn fill_chip_input(kb: &mut [u8]) {
-    kb[0x0] = is_key_down(KeyCode::X) as u8;
-    kb[0x1] = is_key_down(KeyCode::Key1) as u8;
-    kb[0x2] = is_key_down(KeyCode::Key2) as u8;
-    kb[0x3] = is_key_down(KeyCode::Key3) as u8;
-    kb[0x4] = is_key_down(KeyCode::Q) as u8;
-    kb[0x5] = is_key_down(KeyCode::W) as u8;
-    kb[0x6] = is_key_down(KeyCode::E) as u8;
-    kb[0x7] = is_key_down(KeyCode::A) as u8;
-    kb[0x8] = is_key_down(KeyCode::S) as u8;
-    kb[0x9] = is_key_down(KeyCode::D) as u8;
-    kb[0xA] = is_key_down(KeyCode::Z) as u8;
-    kb[0xB] = is_key_down(KeyCode::C) as u8;
-    kb[0xC] = is_key_down(KeyCode::Key4) as u8;
-    kb[0xD] = is_key_down(KeyCode::R) as u8;
-    kb[0xE] = is_key_down(KeyCode::F) as u8;
-    kb[0xF] = is_key_down(KeyCode::V) as u8;
-}
-
-pub fn draw_chip8_display(display: &[u8]) {
-    const DISPLAYWIDTH: usize = DISPLAY_WIDTH as usize;
-    const DISPLAYHEIGHT: usize = DISPLAY_HEIGHT as usize;
-
-    for y in 0..DISPLAYHEIGHT as usize {
-        for x in 0..DISPLAYWIDTH as usize {
-            if display[y * DISPLAYWIDTH as usize + x] != 0 {
-                let sw = screen_width();
-                let pixel_size = sw as usize / DISPLAYWIDTH;
-
-                draw_rectangle(
-                    (x * pixel_size) as f32,
-                    (y * pixel_size) as f32,
-                    pixel_size as f32,
-                    pixel_size as f32,
-                    GREEN,
-                );
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
