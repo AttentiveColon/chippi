@@ -16,8 +16,8 @@ speed_multiplier is now capped at x10
 
 move audio files into their own directory (removed tick.mp3 since it is not used)
 
--there is still something wrong with keypad_test rom
--we should maybe make a custom rom that displays CHIPPI in rainbow mode
+X there is still something wrong with keypad_test rom
+X we should maybe make a custom rom that displays CHIPPI in rainbow mode
 
 Controls:
 
@@ -31,3 +31,65 @@ Esc => Exit
 4|5|6|D|  =>  |Q|W|E|R|
 7|8|9|E|  =>  |A|S|D|F|
 A|0|B|F|  =>  |Z|X|C|V|
+
+
+HEXEDITOR
+
+CHIPPI ROM
+
+00111100 01000010 01111110 01111000
+01000000 01000010 00011000 01000100
+10000000 01000010 00011000 01000100
+10000000 01111110 00011000 01111000 
+01000000 01000010 00011000 01000000
+00111100 01000010 01111110 01000000
+
+0x300 = symbols start
+
+0x300 = C = 0x3B, 0x40, 0x80, 0x80, 0x40, 0x3B
+0x306 = H = 0x42, 0x42, 0x42, 0x7D, 0x42, 0x42
+0x30C = I = 0x7C, 0x18, 0x18, 0x18, 0x18, 0x7C
+0x312 = P = 0x78, 0x44, 0x44, 0x78, 0x40, 0x40
+
+positions {x, y}:
+
+C{8, 13}
+H{16, 13}
+I{24, 13}
+P{32, 13}
+P{40, 13}
+I{48, 13}
+
+load ireg = Annn = set I to nnn
+load reg = 6xkk = set v[x] to kk
+draw = dxyn = draw at cord x,y for n bytes of sprite ireg points to
+
+process:
+load first character into ireg -> load x coord and y coord in v[1] and v[2] -> draw first character with length of 6 -> load next character into ireg, etc
+
+Draw C:
+0xA300, 0x6108, 0x620C, 0xD126	 <-v[2] will keep the value 13 the whole time
+
+Draw H:
+0xA306, 0x6110, 0xD126
+
+Draw I: 
+0xA30C, 0x6118, 0xD126
+
+Draw P:
+0xA312, 0x6120, 0xD126
+
+Draw P:
+0x6128, 0xD126
+
+Draw I: 
+0xA30C, 0x6130, 0xD126
+
+Load 255 in v[3], set delay timer equal to v[3] value:
+0x63FF, 0xF315
+
+put dT value into v[4], skip next instruction if v[4] == 0, otherwise jump back to 0xF407 instruction:
+0xF407, 0x3400, 0x1228
+
+If v[4] equals zero skip to this instruction and Loop to start:
+0x1200

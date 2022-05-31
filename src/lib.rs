@@ -58,7 +58,7 @@ impl Program {
     pub async fn run(&mut self) -> bool {
         while self.process_sys_input() {
             self.frame_counter = self.frame_counter.wrapping_add(1);
-
+            
             clear_background(BLACK);
             for _ in 0..self.speed_multiplier {
                 self.fill_chip_input();
@@ -352,9 +352,10 @@ impl Chip8 {
     //executes the instruction on pc and changes all the state
     //ram[pc] + ram[pc + 1]
     pub fn tick(&mut self) {
+        
         let instruction =
-            ((self.ram[self.pc as usize] as u16) << 8) | self.ram[self.pc as usize + 1] as u16;
-
+        ((self.ram[self.pc as usize] as u16) << 8) | self.ram[self.pc as usize + 1] as u16;
+        
         if self.dreg > 0 {
             self.dreg = self.dreg.saturating_sub(1);
         }
@@ -425,7 +426,7 @@ impl Chip8 {
         self.pc += 2;
     }
 
-    /// 0e00 - CLS
+    /// 00e0 - CLS
     /// Clear the display.
     fn CLS(&mut self) {
         self.display[..].fill(0x0);
@@ -627,7 +628,7 @@ impl Chip8 {
     /// Set I = nnn.
     /// The value of register I is set to nnn.
     fn LDI(&mut self, addr: u16) {
-        self.ireg = addr;
+        self.ireg = addr & 0xFFF;
         self.pc += 2;
     }
 
@@ -719,9 +720,9 @@ impl Chip8 {
     /// Wait for a key press, store the value of the key in Vx
     /// All execution stops until a key is pressed, then the value of that key is stored in Vx.
     fn LDK(&mut self, x: u8) {
-        for i in self.kb {
-            if i != 0 {
-                self.regs[x as usize] = i;
+        for (i, val) in self.kb.iter().enumerate() {
+            if val != &0 {
+                self.regs[x as usize] = i as u8;
                 self.pc += 2;
                 break;
             }
