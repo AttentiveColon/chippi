@@ -12,7 +12,7 @@ use macroquad::prelude::{BLACK, BLUE, GREEN, RED, WHITE, YELLOW};
 
 pub const DEFAULT_PIXEL_SIZE: i32 = 20;
 pub const DEFAULT_SPEED_MULTIPLIER: usize = 1;
-pub const DEFAULT_ROM_FILENAME: &'static str = "roms/brix.ch8";
+pub const DEFAULT_ROM_FILENAME: &'static str = "CHIPPI";
 pub const BUZZ1: &str = "audio/buzz1.wav";
 pub const BUZZ2: &str = "audio/buzz2.wav";
 pub const BUZZ3: &str = "audio/buzz3.wav";
@@ -167,6 +167,17 @@ impl Program {
 
 pub async fn process_env_variables() -> (String, usize, [Sound; 3], bool) {
     let args: Vec<String> = env::args().collect();
+
+    let sound: [Sound; 3] = [
+        load_sound(BUZZ1).await.unwrap(),
+        load_sound(BUZZ2).await.unwrap(),
+        load_sound(BUZZ3).await.unwrap(),
+    ];
+
+    if args.len() == 1 {
+        return (DEFAULT_ROM_FILENAME.to_string(), 1, sound, true);
+    }
+
     let rom_filename = match args.get(1) {
         Some(s) => s.clone(),
         None => DEFAULT_ROM_FILENAME.to_string(),
@@ -182,11 +193,7 @@ pub async fn process_env_variables() -> (String, usize, [Sound; 3], bool) {
         Some(_s) => true,
         None => false,
     };
-    let sound: [Sound; 3] = [
-        load_sound(BUZZ1).await.unwrap(),
-        load_sound(BUZZ2).await.unwrap(),
-        load_sound(BUZZ3).await.unwrap(),
-    ];
+    
 
     (rom_filename, speed_multiplier, sound, rainbow_mode)
 }
@@ -648,31 +655,33 @@ impl Chip8 {
     /// coordinates of the display, it wraps around to the opposite side of the screen. See instruction 8xy3 for more
     /// information on XOR, and section 2.4, Display, for more information on the Chip-8 screen and sprites.
     fn DRW(&mut self, x: u8, y: u8, n: u8) {
-        self.regs[0xF] = 0;
+        let mut set_collision = false;
+        let posX = self.regs[x as usize] as u32;
+        let posY = self.regs[y as usize] as u32;
         for i in 0..n as u32 {
-            //the sprite row
-
             let byte_index = self.ireg as usize + i as usize;
             let mut current_byte = self.ram[byte_index];
 
             for j in 0..8 as u32 {
-                let position = ((self.regs[y as usize] as u32 + i) % DISPLAY_HEIGHT as u32)
-                    * DISPLAY_WIDTH as u32
-                    + (self.regs[x as usize] as u32 + j) % DISPLAY_WIDTH as u32;
+                let position = ((posY + i) % DISPLAY_HEIGHT as u32) * DISPLAY_WIDTH as u32
+                    + (posX + j) % DISPLAY_WIDTH as u32;
 
                 let current_bit = (current_byte & 0x80) >> 7;
 
-                if self.display[position as usize] != 0 && current_bit != 0 {
-                    self.regs[0xF] = 1;
-                } //else {
-                  // self.regs[0xF] = 0;
-                  // }
-
+                if self.display[position as usize] != 0
+                    && self.display[position as usize] ^ current_bit == 0
+                {
+                    set_collision = true;
+                }
                 self.display[position as usize] ^= current_bit;
                 current_byte <<= 1;
             }
         }
-
+        if set_collision {
+            self.regs[0xF] = 1;
+        } else {
+            self.regs[0xF] = 0;
+        }
         self.pc += 2;
     }
 
