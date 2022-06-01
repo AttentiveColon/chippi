@@ -1,6 +1,10 @@
 # Chippi: CHIP-8 Emulator
 Emulator / interpreter implementation of the [CHIP-8 spec](http://devernay.free.fr/hacks/chip8/C8TECH10.HTM)
 
+Sample roms are in the `roms` folder
+
+Roms taken from [kripod/chip8-roms](https://github.com/kripod/chip8-roms)
+
 ![splash screen](assets/splash.gif)
 
 ![bricks](assets/bricks.gif)
