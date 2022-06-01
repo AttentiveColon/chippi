@@ -1,23 +1,10 @@
-Todo:
-
-- fancier display (dots w blur and stuff idk)
-X do more sounds (based on length of sound register)
-X do something about the casting
-X refactor all the chip8 stuff
-    X single parameter per function call (cleaned function calls)
-
-fixed situation where frame_counter could overflow:
-    changed to u8 that does a wrapping add
-
-fixed speed_multiplier underflowing when decreasing the game speed below zero
-    Hitting KeyCode::Key8 now does a saturating_sub(1) so value never goes below zero
-
-speed_multiplier is now capped at x10
-
-move audio files into their own directory (removed tick.mp3 since it is not used)
-
-X there is still something wrong with keypad_test rom
-X we should maybe make a custom rom that displays CHIPPI in rainbow mode
+Refactor:
+-Split program into seperate files
+-removed all unneeded public declarations
+-modified some parameter names
+-process audio now uses a match statment
+-get_bits function now processes everything in the match statement
+-modified chippi rom to have sound
 
 Controls:
 

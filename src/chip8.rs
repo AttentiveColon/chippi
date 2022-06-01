@@ -1,205 +1,9 @@
 #![allow(dead_code, non_snake_case)]
 
 use rand::Rng;
-use std::env;
-
-use macroquad::audio::{load_sound, play_sound, PlaySoundParams, Sound};
-use macroquad::prelude::{
-    clear_background, draw_rectangle, is_key_down, is_key_pressed, next_frame, screen_width, Color,
-    KeyCode,
-};
-use macroquad::prelude::{BLACK, BLUE, GREEN, RED, WHITE, YELLOW};
-
-pub const DEFAULT_PIXEL_SIZE: i32 = 20;
-pub const DEFAULT_SPEED_MULTIPLIER: usize = 1;
-pub const DEFAULT_ROM_FILENAME: &'static str = "CHIPPI";
-pub const BUZZ1: &str = "audio/buzz1.wav";
-pub const BUZZ2: &str = "audio/buzz2.wav";
-pub const BUZZ3: &str = "audio/buzz3.wav";
-pub const SOUND_PARAMS: PlaySoundParams = PlaySoundParams {
-    looped: false,
-    volume: 0.5,
-};
-
-const ALL_COLORS: [Color; 5] = [WHITE, RED, GREEN, BLUE, YELLOW];
-
-pub struct Program {
-    chip: Chip8,
-    speed_multiplier: usize,
-    color: usize,
-    sound: [Sound; 3],
-    rom_filename: String,
-    latch: bool,
-    rainbow_mode: bool,
-    frame_counter: u8,
-}
-
-impl Program {
-    pub fn init(
-        rom_filename: String,
-        speed_multiplier: usize,
-        sound: [Sound; 3],
-        rainbow_mode: bool,
-    ) -> Program {
-        let chip = Chip8::from_rom(Computer::Normal, rom_filename.clone());
-
-        Program {
-            chip,
-            speed_multiplier,
-            sound,
-            color: 0,
-            rom_filename,
-            rainbow_mode,
-            latch: true,
-            frame_counter: 0,
-        }
-    }
-
-    pub async fn run(&mut self) -> bool {
-        while self.process_sys_input() {
-            self.frame_counter = self.frame_counter.wrapping_add(1);
-            
-            clear_background(BLACK);
-            for _ in 0..self.speed_multiplier {
-                self.fill_chip_input();
-                self.chip.tick();
-                self.process_audio();
-            }
-            self.draw_chip8_display();
-            next_frame().await
-        }
-        false
-    }
-
-    fn increase_color(&mut self) {
-        self.color += 1;
-        if self.color > ALL_COLORS.len() - 1 {
-            self.color = 0;
-        }
-    }
-
-    fn process_sys_input(&mut self) -> bool {
-        if is_key_pressed(KeyCode::Key9) {
-            if self.speed_multiplier < 10 {
-                self.speed_multiplier += 1;
-            }
-        }
-        if is_key_pressed(KeyCode::Key8) {
-            self.speed_multiplier = self.speed_multiplier.saturating_sub(1);
-        }
-        if is_key_pressed(KeyCode::Key0) {
-            self.increase_color()
-        }
-        if is_key_pressed(KeyCode::Escape) {
-            return false;
-        }
-        true
-    }
-
-    fn fill_chip_input(&mut self) {
-        self.chip.kb[0x0] = is_key_down(KeyCode::X) as u8;
-        self.chip.kb[0x1] = is_key_down(KeyCode::Key1) as u8;
-        self.chip.kb[0x2] = is_key_down(KeyCode::Key2) as u8;
-        self.chip.kb[0x3] = is_key_down(KeyCode::Key3) as u8;
-        self.chip.kb[0x4] = is_key_down(KeyCode::Q) as u8;
-        self.chip.kb[0x5] = is_key_down(KeyCode::W) as u8;
-        self.chip.kb[0x6] = is_key_down(KeyCode::E) as u8;
-        self.chip.kb[0x7] = is_key_down(KeyCode::A) as u8;
-        self.chip.kb[0x8] = is_key_down(KeyCode::S) as u8;
-        self.chip.kb[0x9] = is_key_down(KeyCode::D) as u8;
-        self.chip.kb[0xA] = is_key_down(KeyCode::Z) as u8;
-        self.chip.kb[0xB] = is_key_down(KeyCode::C) as u8;
-        self.chip.kb[0xC] = is_key_down(KeyCode::Key4) as u8;
-        self.chip.kb[0xD] = is_key_down(KeyCode::R) as u8;
-        self.chip.kb[0xE] = is_key_down(KeyCode::F) as u8;
-        self.chip.kb[0xF] = is_key_down(KeyCode::V) as u8;
-    }
-
-    fn process_audio(&mut self) {
-        if self.latch && self.chip.sreg > 0 {
-            if self.chip.sreg >= 10 {
-                play_sound(self.sound[2], SOUND_PARAMS);
-            } else if self.chip.sreg >= 4 {
-                play_sound(self.sound[1], SOUND_PARAMS);
-            } else {
-                play_sound(self.sound[0], SOUND_PARAMS);
-            }
-            self.latch = false;
-        } else if self.chip.sreg == 0 {
-            self.latch = true;
-        }
-    }
-
-    fn get_color(&mut self) -> Color {
-        if self.rainbow_mode {
-            if self.frame_counter % 10 == 0 {
-                self.increase_color();
-            }
-        }
-
-        ALL_COLORS[self.color]
-    }
-
-    fn draw_chip8_display(&mut self) {
-        const DISPLAYWIDTH: usize = DISPLAY_WIDTH as usize;
-        const DISPLAYHEIGHT: usize = DISPLAY_HEIGHT as usize;
-
-        let color = self.get_color();
-
-        for y in 0..DISPLAYHEIGHT as usize {
-            for x in 0..DISPLAYWIDTH as usize {
-                if self.chip.display[y * DISPLAYWIDTH as usize + x] != 0 {
-                    let sw = screen_width();
-                    let pixel_size = sw as usize / DISPLAYWIDTH;
-
-                    draw_rectangle(
-                        (x * pixel_size) as f32,
-                        (y * pixel_size) as f32,
-                        pixel_size as f32,
-                        pixel_size as f32,
-                        color,
-                    );
-                }
-            }
-        }
-    }
-}
-
-pub async fn process_env_variables() -> (String, usize, [Sound; 3], bool) {
-    let args: Vec<String> = env::args().collect();
-
-    let sound: [Sound; 3] = [
-        load_sound(BUZZ1).await.unwrap(),
-        load_sound(BUZZ2).await.unwrap(),
-        load_sound(BUZZ3).await.unwrap(),
-    ];
-
-    if args.len() == 1 {
-        return (DEFAULT_ROM_FILENAME.to_string(), 1, sound, true);
-    }
-
-    let rom_filename = match args.get(1) {
-        Some(s) => s.clone(),
-        None => DEFAULT_ROM_FILENAME.to_string(),
-    };
-    let speed_multiplier = match args.get(2) {
-        Some(s) => match s.parse::<usize>() {
-            Ok(sp) => sp,
-            _ => panic!("Speed multiplier not valid"),
-        },
-        None => DEFAULT_SPEED_MULTIPLIER,
-    };
-    let rainbow_mode = match args.get(3) {
-        Some(_s) => true,
-        None => false,
-    };
-    
-
-    (rom_filename, speed_multiplier, sound, rainbow_mode)
-}
 
 #[derive(Debug)]
-pub enum Chip8Error {
+enum Chip8Error {
     FileNotFound,
 }
 
@@ -255,22 +59,10 @@ fn load_text(offset: usize) -> [u8; 4096] {
     ram
 }
 
-pub enum Nibble {
-    First,
-    Last,
-    Byte,
-}
-
-fn get_nibble(nib: Nibble, addr: u16) -> u16 {
-    match nib {
-        Nibble::First => (addr & 0xF000) >> 12,
-        Nibble::Last => addr & 0xF,
-        Nibble::Byte => addr & 0xFF,
-    }
-}
-
-fn get_bits(addr: u16) -> (u8, u8, u8, u8, u16) {
+fn get_bits(addr: u16) -> (u8, u8, u8, u8, u8, u8, u16) {
     (
+        ((addr & 0xF000) >> 12) as u8,
+        (addr & 0xF) as u8,
         ((addr >> 8) & 0xf) as u8,
         ((addr >> 4) & 0xf) as u8,
         (addr & 0xf) as u8,
@@ -294,25 +86,6 @@ pub struct Chip8 {
 }
 
 impl Chip8 {
-    pub fn new(comp: Computer) -> Chip8 {
-        Chip8 {
-            ram: load_text(TEXT_MEMORY_START),
-            regs: [0x0; 16],
-            ireg: 0x00,
-            dreg: 0x0,
-            sreg: 0x0,
-            sp: 0x0,
-            stack: [0x00; 16],
-            kb: [0x0; 16],
-            display: [0; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize],
-            pc: match comp {
-                Computer::Normal => PROGRAM_START_LOCATION,
-                Computer::Eti => ETI_PROGRAM_START_LOCATION,
-            } as u16,
-            rng: rand::thread_rng(),
-        }
-    }
-
     pub fn from_rom(comp: Computer, rom: String) -> Chip8 {
         let mut chip8 = Chip8 {
             ram: load_text(TEXT_MEMORY_START),
@@ -334,7 +107,7 @@ impl Chip8 {
         chip8
     }
 
-    pub fn load_rom(&mut self, path: String) -> Result<(), Chip8Error> {
+    fn load_rom(&mut self, path: String) -> Result<(), Chip8Error> {
         let the_file: Vec<u8> = std::fs::read(path).map_err(|_| Chip8Error::FileNotFound)?;
 
         for (dst, src) in self
@@ -363,10 +136,9 @@ impl Chip8 {
             self.sreg = self.sreg.saturating_sub(1);
         }
 
-        let (x, y, n, kk, nnn) = get_bits(instruction);
+        let (first, last, x, y, n, kk, nnn) = get_bits(instruction);
 
-        //get the first nibble and pattern match it
-        match get_nibble(Nibble::First, instruction) {
+        match first {
             0x0 => match instruction {
                 0x00E0 => self.CLS(),
                 0x00EE => self.RET(),
@@ -379,7 +151,7 @@ impl Chip8 {
             0x5 => self.SER(x, y),
             0x6 => self.LD(x, kk),
             0x7 => self.ADD(x, kk),
-            0x8 => match get_nibble(Nibble::Last, instruction) {
+            0x8 => match last {
                 0x0 => self.LDR(x, y),
                 0x1 => self.OR(x, y),
                 0x2 => self.AND(x, y),
@@ -396,12 +168,12 @@ impl Chip8 {
             0xB => self.JPO(nnn),
             0xC => self.RND(x, kk),
             0xD => self.DRW(x, y, n),
-            0xE => match get_nibble(Nibble::Byte, instruction) {
+            0xE => match kk {
                 0x9E => self.SKPK(x),
                 0xA1 => self.SKNPK(x),
                 _ => panic!(),
             },
-            0xF => match get_nibble(Nibble::Byte, instruction) {
+            0xF => match kk {
                 0x07 => self.LDT(x),
                 0x0A => self.LDK(x),
                 0x15 => self.LDD(x),
@@ -445,7 +217,7 @@ impl Chip8 {
     /// 1nnn - JP addr
     /// Jump to location nnn.
     /// The interpreter sets the program counter to nnn.
-    pub fn JP(&mut self, addr: u16) {
+    fn JP(&mut self, addr: u16) {
         self.pc = addr;
     }
 

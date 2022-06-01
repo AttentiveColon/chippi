@@ -1,11 +1,15 @@
-mod lib;
+mod program;
+mod chip8;
+
+use program::DEFAULT_PIXEL_SIZE;
+use chip8::{DISPLAY_WIDTH, DISPLAY_HEIGHT};
 
 fn get_mq_conf() -> macroquad::prelude::Conf {
     //window config
     macroquad::prelude::Conf {
         window_title: String::from("chippi"),
-        window_width: lib::DEFAULT_PIXEL_SIZE * lib::DISPLAY_WIDTH as i32,
-        window_height: lib::DEFAULT_PIXEL_SIZE * lib::DISPLAY_HEIGHT as i32,
+        window_width: DEFAULT_PIXEL_SIZE * DISPLAY_WIDTH as i32,
+        window_height: DEFAULT_PIXEL_SIZE * DISPLAY_HEIGHT as i32,
         fullscreen: false,
         ..Default::default()
     }
@@ -13,7 +17,7 @@ fn get_mq_conf() -> macroquad::prelude::Conf {
 
 #[macroquad::main(get_mq_conf)]
 async fn main() {
-    let (rom_filename, speed_multiplier, sound, rainbow_mode) = lib::process_env_variables().await;
-    let mut program = lib::Program::init(rom_filename, speed_multiplier, sound, rainbow_mode);
+    let (file, speed, sound, mode) = program::process_env_variables().await;
+    let mut program = program::Program::init(file, speed, sound, mode);
     while program.run().await {}
 }
