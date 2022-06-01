@@ -45,7 +45,7 @@ impl Program {
             chip,
             speed_multiplier,
             sound,
-            color: 0,
+            color: 2,
             rainbow_mode,
             latch: true,
             frame_counter: 0,
@@ -76,7 +76,7 @@ impl Program {
 
     fn process_sys_input(&mut self) -> bool {
         if is_key_pressed(KeyCode::Key9) {
-            if self.speed_multiplier < 10 {
+            if self.speed_multiplier < 20 {
                 self.speed_multiplier += 1;
             }
         }
