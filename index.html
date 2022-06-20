@@ -1,0 +1,96 @@
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>chippi</title>
+    <style>
+        #glcanvas {
+            width: 400px;
+        }
+        form > * {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <form>
+        Rom select:
+        <select id="rom-select">
+            <option value="0">Chippi demo</option>
+            <option value="1">Blinky</option>
+            <option value="2">Breakout</option>
+            <option value="3">Pong</option>
+        </select>
+        </br>
+        Color:
+        <select id="color-select">
+            <option value="0">Green</option>
+            <option value="1">Red</option>
+            <option value="2">White</option>
+            <option value="3">Blue</option>
+            <option value="4">Yellow</option>
+        </select>
+        </br>
+        Speed:
+        <input type="text" id="speed-mul-select" value="3" maxlength="2">
+        </br>
+        Rainbow Mode:
+        <input type="radio" id="rainbow-false" name="rainbow-mode-select" value="0" checked>
+        <label for="rainbow-false">No</label>
+        <input type="radio" id="rainbow-true" name="rainbow-mode-select" value="1">
+        <label for="rainbow-true">Yes</label><br>
+    </form>
+    <canvas id="glcanvas" tabindex='1'></canvas>
+    <!-- Minified and statically hosted version of https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
+    <script src="https://not-fl3.github.io/miniquad-samples/mq_js_bundle.js"></script>
+    <script>
+        load("./target/wasm32-unknown-unknown/release/chippi.wasm");
+
+        //setting default values (set this after the wasm loaded)
+        // let e = document.getElementById("rom-select");
+        // wasm_exports.ev_swap_rom(e.value);
+        // e = document.getElementById("color-select");
+        // wasm_exports.ev_change_color(e.value);
+        // e = document.getElementById('speed-mul-select');
+        // wasm_exports.ev_change_speed(e.value)
+        // wasm_exports.ev_change_rainbow_mode();
+
+        let rom_select = document.querySelector('#rom-select');
+        rom_select.addEventListener('change', function() {
+            let e = document.getElementById("rom-select");
+            wasm_exports.ev_swap_rom(e.value);
+        });
+
+        let color_select = document.querySelector('#color-select');
+        color_select.addEventListener('change', function() {
+            let e = document.getElementById("color-select");
+            wasm_exports.ev_change_color(e.value);
+        });
+
+        let speed_mul = document.querySelector('#speed-mul-select');
+        speed_mul.addEventListener('change', function() {
+            let e = document.getElementById('speed-mul-select');
+            wasm_exports.ev_change_speed(e.value)
+        })
+
+        let rainbow_mode = document.querySelectorAll('input[name="rainbow-mode-select"]')
+        for (const radio of rainbow_mode) {
+            radio.addEventListener("change", function() {
+                if(radio.checked) {
+                    let e = document.getElementById("color-select");
+                    wasm_exports.ev_change_rainbow_mode(e.value);
+                }
+            })
+        }
+        //
+        // let rainbow_mode = document.querySelector('#rainbow-mode-select');
+        // rainbow_mode.addEventListener('change', function() {
+        //     let e = document.getElementById('rainbow-mode-select');
+        //     console.log(e.value)
+        // })
+        //
+    </script>
+</body>
+
+</html>

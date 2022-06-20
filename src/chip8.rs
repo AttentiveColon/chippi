@@ -1,6 +1,7 @@
 #![allow(dead_code, non_snake_case)]
 
-use rand::Rng;
+use macroquad::rand;
+use macroquad::file;
 
 #[derive(Debug)]
 enum Chip8Error {
@@ -82,11 +83,10 @@ pub struct Chip8 {
     stack: [u16; 16], // stack. array of pointers
     pub kb: [u8; 16], // the keyboard
     pub display: [u8; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize],
-    rng: rand::rngs::ThreadRng,
 }
 
 impl Chip8 {
-    pub fn from_rom(comp: Computer, rom: String) -> Chip8 {
+    pub async fn from_rom(comp: Computer, rom: String) -> Chip8 {
         let mut chip8 = Chip8 {
             ram: load_text(TEXT_MEMORY_START),
             regs: [0x0; 16],
@@ -101,14 +101,13 @@ impl Chip8 {
             stack: [0x00; 16],
             kb: [0x0; 16],
             display: [0; DISPLAY_WIDTH as usize * DISPLAY_HEIGHT as usize],
-            rng: rand::thread_rng(),
         };
-        chip8.load_rom(rom).expect("Couldn't Load Rom");
+        chip8.load_rom(rom.clone()).await.expect(&format!("Couldn't Load Rom. path: {rom}"));
         chip8
     }
 
-    fn load_rom(&mut self, path: String) -> Result<(), Chip8Error> {
-        let the_file: Vec<u8> = std::fs::read(path).map_err(|_| Chip8Error::FileNotFound)?;
+    async fn load_rom(&mut self, path: String) -> Result<(), Chip8Error> {
+        let the_file: Vec<u8> = file::load_file(&path).await.map_err(|_| Chip8Error::FileNotFound)?;
 
         for (dst, src) in self
             .ram
@@ -416,7 +415,7 @@ impl Chip8 {
     /// The interpreter generates a random number from 0 to 255, which is then ANDed with the value kk.
     /// The results are stored in Vx.
     fn RND(&mut self, x: u8, kk: u8) {
-        self.regs[x as usize] = self.rng.gen::<u8>() & kk;
+        self.regs[x as usize] = rand::gen_range(0u8, 255u8) & kk;
         self.pc += 2;
     }
 

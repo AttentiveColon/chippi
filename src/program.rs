@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::env;
 
 use crate::chip8::{Chip8, Computer, DISPLAY_WIDTH, DISPLAY_HEIGHT};
@@ -11,16 +12,23 @@ use macroquad::prelude::{BLACK, BLUE, GREEN, RED, WHITE, YELLOW};
 
 pub const DEFAULT_PIXEL_SIZE: i32 = 20;
 const DEFAULT_SPEED_MULTIPLIER: usize = 1;
-const DEFAULT_ROM_FILENAME: &'static str = "CHIPPI";
-const BUZZ1: &str = "audio/buzz1.wav";
-const BUZZ2: &str = "audio/buzz2.wav";
-const BUZZ3: &str = "audio/buzz3.wav";
+const DEFAULT_ROM_FILENAME: &str = "./roms/chippi.ch8";
+const BUZZ1: &str = "./audio/buzz1.wav";
+const BUZZ2: &str = "./audio/buzz2.wav";
+const BUZZ3: &str = "./audio/buzz3.wav";
 const SOUND_PARAMS: PlaySoundParams = PlaySoundParams {
     looped: false,
     volume: 0.5,
 };
 
-const ALL_COLORS: [Color; 5] = [WHITE, RED, GREEN, BLUE, YELLOW];
+pub enum JSEvents{
+    ChangeColor(i32),
+    SwapRom(String),
+    ChangeSpeed(i32),
+    ChangeRainbowMode(i32),
+}
+
+const ALL_COLORS: [Color; 5] = [GREEN, RED, WHITE, BLUE, YELLOW];
 
 pub struct Program {
     chip: Chip8,
@@ -33,27 +41,54 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn init(
+    pub async fn init(
         rom_filename: String,
         speed_multiplier: usize,
         sound: [Sound; 3],
         rainbow_mode: bool,
     ) -> Program {
-        let chip = Chip8::from_rom(Computer::Normal, rom_filename.clone());
+        let chip = Chip8::from_rom(Computer::Normal, rom_filename.clone()).await;
 
         Program {
             chip,
             speed_multiplier,
             sound,
-            color: 2,
+            color: 0,
             rainbow_mode,
             latch: true,
             frame_counter: 0,
         }
     }
 
-    pub async fn run(&mut self) -> bool {
+    pub async fn run(&mut self, events: &mut Option<VecDeque<JSEvents>>) -> bool {
         while self.process_sys_input() {
+
+            // processing js events
+            match events {
+                Some(events) => {
+                    while let Some(ev) = events.pop_front() {
+                        match ev {
+                            JSEvents::ChangeColor(new_color) => {
+                                self.color = new_color as usize;
+                            },
+                            JSEvents::SwapRom(rom_filename) => {
+                                self.chip = Chip8::from_rom(Computer::Normal, rom_filename).await;
+                            },
+                            JSEvents::ChangeSpeed(new_speed) => {
+                                self.speed_multiplier = new_speed as usize;
+                            },
+                            JSEvents::ChangeRainbowMode(new_color) => {
+                                if self.rainbow_mode {
+                                    self.color = new_color as usize;
+                                }
+                                self.rainbow_mode = !self.rainbow_mode;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
             self.frame_counter = self.frame_counter.wrapping_add(1);
             clear_background(BLACK);
             for _ in 0..self.speed_multiplier {
@@ -162,7 +197,7 @@ pub async fn process_env_variables() -> (String, usize, [Sound; 3], bool) {
         load_sound(BUZZ2).await.unwrap(),
         load_sound(BUZZ3).await.unwrap(),
     ];
-
+    
     if args.len() == 1 {
         return (DEFAULT_ROM_FILENAME.to_string(), 1, sound, true);
     }
